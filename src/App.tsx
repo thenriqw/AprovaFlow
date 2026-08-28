@@ -1,0 +1,38 @@
+import React, { useState } from 'react';
+import Layout from './components/Layout';
+import Dashboard from './components/Dashboard';
+import Timer from './components/Timer';
+import CycleManager from './components/Cycle';
+import Importer from './components/Importer';
+import History from './components/History';
+import Settings from './components/Settings';
+import Onboarding from './components/Onboarding';
+import Subjects from './components/Subjects';
+import { useStore } from './store';
+
+function App() {
+  const { activeTab, setActiveTab, setActiveTask, hasCompletedOnboarding } = useStore();
+
+  const navigateToTimer = (subject: string, topic: string) => {
+    setActiveTask({ subject, topic });
+    setActiveTab('timer');
+  };
+
+  if (!hasCompletedOnboarding) {
+    return <Onboarding />;
+  }
+
+  return (
+    <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
+      {activeTab === 'dashboard' && <Dashboard />}
+      {activeTab === 'timer' && <Timer />}
+      {activeTab === 'cycle' && <CycleManager onStartTask={navigateToTimer} />}
+      {activeTab === 'subjects' && <Subjects />}
+      {activeTab === 'import' && <Importer />}
+      {activeTab === 'history' && <History />}
+      {activeTab === 'settings' && <Settings />}
+    </Layout>
+  );
+}
+
+export default App;
