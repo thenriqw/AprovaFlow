@@ -5,7 +5,7 @@ import { cn } from '../lib/utils';
 import { googleSignIn, logout } from '../lib/firebase';
 
 export default function Settings() {
-  const { weeklyGoalHours, setWeeklyGoalHours, resetAllData, hasCompletedOnboarding, setActiveTab, firebaseUser, needsAuth } = useStore();
+  const { weeklyGoalHours, setWeeklyGoalHours, resetAllData, hasCompletedOnboarding, setActiveTab, firebaseUser } = useStore();
   const [deleteStep, setDeleteStep] = useState(0);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 

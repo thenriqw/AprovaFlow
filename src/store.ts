@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { addDays, startOfWeek, format } from 'date-fns';
 import type { User as FirebaseUser } from 'firebase/auth';
+import type { Plan, Subject, Topic, StudyActivity, Resource as DomainResource, StudySession as DomainSession } from './domain/types';
 
 export type ErrorReason = 'teoria' | 'interpretacao' | 'tempo' | 'calculo' | 'atencao' | 'outro' | '';
 
@@ -82,13 +83,20 @@ interface ActiveTaskInfo {
 
 interface AppState {
   firebaseUser: FirebaseUser | null;
-  workspaceToken: string | null;
-  needsAuth: boolean;
   authReady: boolean;
+  dbLoaded: boolean;
+  isSyncingFromDb: boolean;
   setFirebaseUser: (user: FirebaseUser | null) => void;
-  setWorkspaceToken: (token: string | null) => void;
-  setNeedsAuth: (needsAuth: boolean) => void;
   setAuthReady: (authReady: boolean) => void;
+  loadFromDb: (data: any) => void;
+  setSyncingFromDb: (val: boolean) => void;
+  
+  // V2 Domain Architecture State
+  plans: Plan[];
+  activePlanId: string | null;
+  v2Subjects: Subject[];
+  v2Topics: Topic[];
+  v2Activities: StudyActivity[];
   
   sessions: StudySession[];
   cycleQueue: CycleItem[];
@@ -120,7 +128,7 @@ interface AppState {
   setActiveTab: (tab: string) => void;
 }
 
-// Storage Migration
+// (Block removed from here, moving down)
 if (typeof window !== 'undefined') {
   try {
     const oldStorageStr = localStorage.getItem('estudei-storage');
@@ -155,13 +163,11 @@ export function calculatePriorityScore(item: CycleItem, state: AppState): { scor
   }
   
   // 3. Exam Proximity (if any)
+  let isCloseToExam = false;
   if (state.userProfile?.examDate) {
     const daysToExam = (new Date(state.userProfile.examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
     if (daysToExam > 0 && daysToExam < 30) {
-      score += 30; // High boost if exam is very close
-      reasons.push('prova próxima (menos de 30 dias)');
-    } else if (daysToExam > 0 && daysToExam < 90) {
-      score += 15;
+      isCloseToExam = true;
     }
   }
   
@@ -171,8 +177,13 @@ export function calculatePriorityScore(item: CycleItem, state: AppState): { scor
     (s.topicId === item.topicId || s.topic === item.topic)
   );
   
+  let isWeak = false;
+  let isUnstudied = false;
+  let isOverdue = false;
+
   if (subjectSessions.length === 0) {
     score += 20;
+    isUnstudied = true;
     reasons.push('nunca estudado');
   } else {
     subjectSessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -180,6 +191,9 @@ export function calculatePriorityScore(item: CycleItem, state: AppState): { scor
     
     // Proximity
     const daysSinceLastStudy = Math.floor((Date.now() - new Date(lastSession.date).getTime()) / (1000 * 60 * 60 * 24));
+    if (daysSinceLastStudy > 7) {
+      isOverdue = true;
+    }
     if (daysSinceLastStudy > 0) {
       score += Math.min(daysSinceLastStudy * 2, 40);
       reasons.push(`${daysSinceLastStudy} dias sem estudar`);
@@ -195,6 +209,7 @@ export function calculatePriorityScore(item: CycleItem, state: AppState): { scor
       const accuracy = totalC / totalQ;
       if (accuracy < 0.6) {
         score += 25;
+        isWeak = true;
         reasons.push(`desempenho fraco (${Math.round(accuracy*100)}% de acertos)`);
       } else if (accuracy < 0.8) {
         score += 10;
@@ -203,15 +218,35 @@ export function calculatePriorityScore(item: CycleItem, state: AppState): { scor
     }
   }
 
-  // Cap expected duration based on daily availability
+  // Boost for exam proximity + high importance + (weak, unstudied, or overdue)
+  if (isCloseToExam && sub && sub.importance >= 4) {
+    if (isWeak || isUnstudied || isOverdue) {
+      score += 40;
+      reasons.push('urgência para a prova (alta importância pendente)');
+    } else {
+      score += 15; // Just close to exam but performing ok
+    }
+  }
+
+  // Cap expected duration based on daily availability and what was studied today
   let duration = item.expectedDurationSeconds || (60 * 60); // Default 1 hour
   const todayDayOfWeek = new Date().getDay(); // 0 = Sunday
   const todayAvailabilityHours = state.userProfile?.availableTimePerDay?.[todayDayOfWeek];
-  if (todayAvailabilityHours !== undefined && todayAvailabilityHours > 0) {
-    const availableSeconds = todayAvailabilityHours * 60 * 60;
-    if (duration > availableSeconds) {
-      duration = availableSeconds; // Cap it
-      reasons.push('ajustado à disponibilidade de hoje');
+  
+  if (todayAvailabilityHours !== undefined && todayAvailabilityHours >= 0) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const studiedTodaySecs = state.sessions
+      .filter(s => s.date.startsWith(todayStr))
+      .reduce((acc, s) => acc + s.durationSeconds, 0);
+      
+    const availableSecondsToday = Math.max(0, (todayAvailabilityHours * 60 * 60) - studiedTodaySecs);
+    
+    if (availableSecondsToday === 0) {
+      duration = 0;
+      reasons.push('meta diária atingida ou folga (0h)');
+    } else if (duration > availableSecondsToday) {
+      duration = availableSecondsToday;
+      reasons.push(`ajustado para ${Math.round(duration/60)}m (restante hoje)`);
     }
   }
   
@@ -224,13 +259,38 @@ export const useStore = create<AppState>()(
   persist(
     (set) => ({
       firebaseUser: null,
-      workspaceToken: null,
-      needsAuth: true,
       authReady: false,
+      dbLoaded: false,
+      isSyncingFromDb: false,
       setFirebaseUser: (user) => set({ firebaseUser: user }),
-      setWorkspaceToken: (token) => set({ workspaceToken: token }),
-      setNeedsAuth: (needsAuth) => set({ needsAuth }),
       setAuthReady: (authReady) => set({ authReady }),
+      setSyncingFromDb: (val) => set({ isSyncingFromDb: val }),
+      
+      // V2
+      plans: [],
+      activePlanId: null,
+      v2Subjects: [],
+      v2Topics: [],
+      v2Activities: [],
+      
+      loadFromDb: (data) => set((state) => {
+        // Here we could inject the migration logic if we loaded legacy data
+        // For now, just load what we have
+        return {
+          hasCompletedOnboarding: data.hasCompletedOnboarding ?? false,
+          weeklyGoalHours: data.weeklyGoalHours ?? 25,
+          userProfile: data.userProfile ?? null,
+          cycleQueue: data.cycleQueue ?? [],
+          activeTask: data.activeTask ?? null,
+          sessions: data.sessions ?? [],
+          plans: data.plans ?? [],
+          activePlanId: data.activePlanId ?? null,
+          v2Subjects: data.v2Subjects ?? [],
+          v2Topics: data.v2Topics ?? [],
+          v2Activities: data.v2Activities ?? [],
+          dbLoaded: true,
+        };
+      }),
       
       sessions: [],
       cycleQueue: defaultCycle,
@@ -472,6 +532,59 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'aprovaflow-storage', // Migrated storage key
+      version: 1,
+      migrate: (persistedState: any, version: number) => {
+        return persistedState;
+      },
+      partialize: (state) => {
+        const { firebaseUser, authReady, dbLoaded, isSyncingFromDb, ...persistedState } = state;
+        return persistedState;
+      },
     }
   )
 );
+
+// Db Sync Logic
+let saveTimeout: any = null;
+
+useStore.subscribe((state, prevState) => {
+  if (!state.firebaseUser || !state.dbLoaded || state.isSyncingFromDb) return;
+  
+  const baseDataChanged = 
+    state.hasCompletedOnboarding !== prevState.hasCompletedOnboarding ||
+    state.weeklyGoalHours !== prevState.weeklyGoalHours ||
+    state.userProfile !== prevState.userProfile ||
+    state.cycleQueue !== prevState.cycleQueue ||
+    state.activeTask !== prevState.activeTask;
+    
+  if (baseDataChanged) {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(async () => {
+      try {
+        const { saveUserBaseData } = await import('./lib/db');
+        await saveUserBaseData(state.firebaseUser!.uid, {
+          hasCompletedOnboarding: state.hasCompletedOnboarding,
+          weeklyGoalHours: state.weeklyGoalHours,
+          userProfile: state.userProfile,
+          cycleQueue: state.cycleQueue,
+          activeTask: state.activeTask,
+        });
+      } catch (e) {
+        console.error("Failed to sync base data to DB", e);
+      }
+    }, 1000);
+  }
+
+  const sessionsChanged = state.sessions !== prevState.sessions;
+  if (sessionsChanged) {
+    const newSessions = state.sessions.filter(s => !prevState.sessions.find(p => p.id === s.id));
+    const removedSessions = prevState.sessions.filter(s => !state.sessions.find(p => p.id === s.id));
+    
+    if (newSessions.length > 0 || removedSessions.length > 0) {
+      import('./lib/db').then(({ saveSessionToDb, deleteSessionFromDb }) => {
+        newSessions.forEach(s => saveSessionToDb(state.firebaseUser!.uid, s));
+        removedSessions.forEach(s => deleteSessionFromDb(state.firebaseUser!.uid, s.id));
+      }).catch(e => console.error("Failed to sync sessions to DB", e));
+    }
+  }
+});
