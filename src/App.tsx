@@ -10,7 +10,7 @@ import Onboarding from './components/Onboarding';
 import Subjects from './components/Subjects';
 import { useStore } from './store';
 import { initAuth, googleSignIn } from './lib/firebase';
-import { getUserConfig, loadPlanData, getLegacyUserData, saveLegacyUserBaseData, saveLegacySessionToDb } from './lib/db';
+import { getUserConfig, loadPlanData, getPlans, getLegacyUserData, saveLegacyUserBaseData, saveLegacySessionToDb } from './lib/db';
 import { migrateLegacyToV2 } from './lib/migration';
 
 function App() {
@@ -50,13 +50,33 @@ function App() {
               let plansData = {};
               if (config.activePlanId) {
                 const planFullData = await loadPlanData(user.uid, config.activePlanId);
+                const plans = await getPlans(user.uid);
+                
+                // Bridge V2 -> Legacy UI
+                const activePlan = plans.find(p => p.id === config.activePlanId);
+                const bridgedProfile = activePlan ? {
+                  objective: activePlan.objective,
+                  examDate: activePlan.examDate,
+                  availableTimePerDay: activePlan.availableTimePerDay,
+                  subjects: planFullData.subjects.map(s => ({
+                    id: s.id,
+                    name: s.name,
+                    difficulty: s.difficulty >= 4 ? 'high' : (s.difficulty >= 3 ? 'medium' : 'low'),
+                    importance: s.importance,
+                    isArchived: s.isArchived,
+                    topics: planFullData.topics.filter(t => t.subjectId === s.id).map(t => ({ id: t.id, name: t.name }))
+                  }))
+                } : null;
+                
                 plansData = {
                   activePlanId: config.activePlanId,
+                  plans: plans,
                   v2Subjects: planFullData.subjects,
                   v2Topics: planFullData.topics,
                   v2Activities: planFullData.activities,
-                  // Merge sessions for UI compatibility for now
                   sessions: planFullData.sessions,
+                  userProfile: bridgedProfile,
+                  // We could recalculate cycleQueue here, but store handles it if we syncCycleWithSubjects
                 };
               } else if (config.userProfile) {
                 // Legacy fallback

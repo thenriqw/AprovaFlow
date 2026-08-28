@@ -1,6 +1,6 @@
 import { db } from './firebase';
-import { doc, setDoc, writeBatch } from 'firebase/firestore';
-import type { Plan, Subject, Topic, StudySession } from '../domain/types';
+import { doc, writeBatch } from 'firebase/firestore';
+import type { Plan, Subject, Topic } from '../domain/types';
 
 export const migrateLegacyToV2 = async (uid: string, legacyData: any) => {
   if (!legacyData || !legacyData.userProfile || !legacyData.userProfile.subjects) {
@@ -22,13 +22,11 @@ export const migrateLegacyToV2 = async (uid: string, legacyData: any) => {
     updatedAt: new Date().toISOString(),
   };
   
-  const batch = writeBatch(db);
+  const operations: any[] = [];
   
-  // Save plan
   const planRef = doc(db, 'users', uid, 'plans', planId);
-  batch.set(planRef, newPlan);
+  operations.push({ ref: planRef, data: newPlan });
   
-  // Map subjects and topics
   userProfile.subjects.forEach((legacySub: any) => {
     const subId = legacySub.id;
     const newSub: Subject = {
@@ -37,13 +35,13 @@ export const migrateLegacyToV2 = async (uid: string, legacyData: any) => {
       name: legacySub.name,
       importance: legacySub.importance,
       difficulty: legacySub.difficulty === 'high' ? 5 : (legacySub.difficulty === 'medium' ? 3 : 1),
-      isArchived: legacySub.isArchived,
+      isArchived: legacySub.isArchived || false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     
     const subRef = doc(db, 'users', uid, 'plans', planId, 'subjects', subId);
-    batch.set(subRef, newSub);
+    operations.push({ ref: subRef, data: newSub });
     
     if (legacySub.topics) {
       legacySub.topics.forEach((legacyTop: any) => {
@@ -56,28 +54,36 @@ export const migrateLegacyToV2 = async (uid: string, legacyData: any) => {
           updatedAt: new Date().toISOString(),
         };
         const topRef = doc(db, 'users', uid, 'plans', planId, 'topics', topId);
-        batch.set(topRef, newTop);
+        operations.push({ ref: topRef, data: newTop });
       });
     }
   });
   
-  // Map sessions
   sessions.forEach((sess: any) => {
     const sessRef = doc(db, 'users', uid, 'plans', planId, 'sessions', sess.id);
-    batch.set(sessRef, {
-      ...sess,
-      planId: planId,
-    });
+    operations.push({ ref: sessRef, data: { ...sess, planId: planId } });
   });
   
-  // Nullify old config so we don't migrate again
   const userRef = doc(db, 'users', uid);
-  batch.set(userRef, { 
-    userProfile: null, 
-    migratedToV2: true,
-    activePlanId: planId
-  }, { merge: true });
+  operations.push({ 
+    ref: userRef, 
+    data: { userProfile: null, migratedToV2: true, activePlanId: planId }, 
+    options: { merge: true } 
+  });
   
-  await batch.commit();
+  // Chunk operations into batches of 450 (safe limit)
+  for (let i = 0; i < operations.length; i += 450) {
+    const batch = writeBatch(db);
+    const chunk = operations.slice(i, i + 450);
+    for (const op of chunk) {
+      if (op.options) {
+        batch.set(op.ref, op.data, op.options);
+      } else {
+        batch.set(op.ref, op.data);
+      }
+    }
+    await batch.commit();
+  }
+  
   return true;
 };

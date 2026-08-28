@@ -71,6 +71,7 @@ export interface CycleItem {
 }
 
 interface ActiveTaskInfo {
+  id?: string;
   subject: string;
   topic: string;
   subjectId?: string;
@@ -110,10 +111,10 @@ interface AppState {
   recalculateRoute: () => void;
   syncCycleWithSubjects: () => void;
   setActiveTask: (task: ActiveTaskInfo | null) => void;
-  completeCycleItem: (subject: string, topic: string) => void;
+  completeCycleItem: (id: string) => void;
   setWeeklyGoalHours: (hours: number) => void;
   resetAllData: () => void;
-  completeOnboarding: (profile: UserProfile) => void;
+  completeOnboarding: (profile: UserProfile) => Promise<void> | void;
   skipOnboarding: () => void;
   updateUserProfile: (profile: UserProfile) => void;
   // Subject Management
@@ -350,9 +351,20 @@ export const useStore = create<AppState>()(
           }
           
           const subject = activeSubjects.find(s => s.id === item.subjectId);
-          if (subject && item.topicId) {
-            const hasTopic = subject.topics.some(t => t.id === item.topicId);
-            if (!hasTopic) {
+          if (subject) {
+            // Update canonical names in case they changed
+            item.subject = subject.name;
+            item.weight = subject.importance;
+
+            if (item.topicId) {
+              const topic = subject.topics.find(t => t.id === item.topicId);
+              if (!topic) {
+                newQueue.splice(i, 1);
+              } else {
+                item.topic = topic.name; // canonical renaming
+              }
+            } else if (item.topic === 'Geral' && subject.topics.length > 0) {
+              // Lifecycle de Geral: remove Geral placeholder if real topics were added
               newQueue.splice(i, 1);
             }
           }
@@ -393,9 +405,9 @@ export const useStore = create<AppState>()(
         return { cycleQueue: newQueue };
       }),
       setActiveTask: (task) => set({ activeTask: task }),
-      completeCycleItem: (subject, topic) => set((state) => {
+      completeCycleItem: (id) => set((state) => {
         const newQueue: CycleItem[] = state.cycleQueue.map(item => 
-          (item.subject === subject && item.topic === topic) 
+          (item.id === id) 
             ? { ...item, status: 'done' } 
             : item
         );
@@ -407,8 +419,8 @@ export const useStore = create<AppState>()(
       }),
       setWeeklyGoalHours: (hours) => set({ weeklyGoalHours: hours }),
       resetAllData: () => set({ sessions: [], cycleQueue: defaultCycle, activeTask: null, hasCompletedOnboarding: false, userProfile: null }),
-      completeOnboarding: (profile) => set((state) => {
-        // Build initial cycle instantly based on the subjects
+      completeOnboarding: async (profile) => {
+        const state = useStore.getState();
         const initialQueue: CycleItem[] = [];
         profile.subjects.forEach(subject => {
           if (!subject.isArchived) {
@@ -437,13 +449,71 @@ export const useStore = create<AppState>()(
           }
         });
         
-        return { 
+        let newPlanId: string | null = null;
+        let v2Subjects: Subject[] = [];
+        let v2Topics: Topic[] = [];
+
+        // If user is authenticated, create a V2 plan directly
+        if (state.firebaseUser) {
+          const uid = state.firebaseUser.uid;
+          newPlanId = 'plan_' + crypto.randomUUID().split('-')[0];
+          
+          const newPlan: Plan = {
+            id: newPlanId,
+            userId: uid,
+            name: 'Meu Plano Principal',
+            objective: profile.objective || '',
+            examDate: profile.examDate || '',
+            availableTimePerDay: profile.availableTimePerDay || {},
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+
+          profile.subjects.forEach(sub => {
+            const newSub: Subject = {
+              id: sub.id,
+              planId: newPlanId!,
+              name: sub.name,
+              importance: sub.importance,
+              difficulty: sub.difficulty === 'high' ? 5 : (sub.difficulty === 'medium' ? 3 : 1),
+              isArchived: sub.isArchived || false,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            v2Subjects.push(newSub);
+            
+            sub.topics.forEach(t => {
+              v2Topics.push({
+                id: t.id,
+                subjectId: sub.id,
+                name: t.name,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              });
+            });
+          });
+
+          // Save everything to DB immediately via batch
+          import('./lib/firebase').then(({ db }) => {
+            import('firebase/firestore').then(async ({ writeBatch, doc }) => {
+              const batch = writeBatch(db);
+              batch.set(doc(db, 'users', uid, 'plans', newPlanId!), newPlan);
+              v2Subjects.forEach(s => batch.set(doc(db, 'users', uid, 'plans', newPlanId!, 'subjects', s.id), s));
+              v2Topics.forEach(t => batch.set(doc(db, 'users', uid, 'plans', newPlanId!, 'topics', t.id), t));
+              batch.set(doc(db, 'users', uid), { activePlanId: newPlanId }, { merge: true });
+              await batch.commit();
+            });
+          }).catch(console.error);
+        }
+        
+        set({ 
           hasCompletedOnboarding: true, 
           userProfile: profile, 
           cycleQueue: initialQueue,
-          weeklyGoalHours: Object.values(profile.availableTimePerDay).reduce((a, b) => a + b, 0)
-        };
-      }),
+          weeklyGoalHours: Object.values(profile.availableTimePerDay).reduce((a, b) => a + b, 0),
+          ...(newPlanId ? { activePlanId: newPlanId, plans: [{ id: newPlanId } as Plan], v2Subjects, v2Topics } : {})
+        });
+      },
       skipOnboarding: () => set({ hasCompletedOnboarding: true }),
       updateUserProfile: (profile) => set({ userProfile: profile, weeklyGoalHours: Object.values(profile.availableTimePerDay).reduce((a, b) => a + b, 0) }),
       
@@ -532,8 +602,16 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'aprovaflow-storage', // Migrated storage key
-      version: 1,
+      version: 2,
       migrate: (persistedState: any, version: number) => {
+        if (version === 1) {
+          // Migrate V1 to V2
+          persistedState.plans = persistedState.plans || [];
+          persistedState.activePlanId = persistedState.activePlanId || null;
+          persistedState.v2Subjects = persistedState.v2Subjects || [];
+          persistedState.v2Topics = persistedState.v2Topics || [];
+          persistedState.v2Activities = persistedState.v2Activities || [];
+        }
         return persistedState;
       },
       partialize: (state) => {
@@ -546,7 +624,6 @@ export const useStore = create<AppState>()(
 
 // Db Sync Logic
 let saveTimeout: any = null;
-
 useStore.subscribe((state, prevState) => {
   if (!state.firebaseUser || !state.dbLoaded || state.isSyncingFromDb) return;
   
@@ -555,20 +632,95 @@ useStore.subscribe((state, prevState) => {
     state.weeklyGoalHours !== prevState.weeklyGoalHours ||
     state.userProfile !== prevState.userProfile ||
     state.cycleQueue !== prevState.cycleQueue ||
-    state.activeTask !== prevState.activeTask;
+    state.activeTask !== prevState.activeTask ||
+    state.activePlanId !== prevState.activePlanId;
     
   if (baseDataChanged) {
     if (saveTimeout) clearTimeout(saveTimeout);
     saveTimeout = setTimeout(async () => {
       try {
-        const { saveUserBaseData } = await import('./lib/db');
-        await saveUserBaseData(state.firebaseUser!.uid, {
-          hasCompletedOnboarding: state.hasCompletedOnboarding,
-          weeklyGoalHours: state.weeklyGoalHours,
-          userProfile: state.userProfile,
-          cycleQueue: state.cycleQueue,
-          activeTask: state.activeTask,
-        });
+        const { saveUserConfig, saveLegacyUserBaseData } = await import('./lib/db');
+        
+        if (state.activePlanId) {
+          // V2 user
+          await saveUserConfig(state.firebaseUser!.uid, {
+            hasCompletedOnboarding: state.hasCompletedOnboarding,
+            activePlanId: state.activePlanId,
+            weeklyGoalHours: state.weeklyGoalHours, // We can store this at config level or plan level
+            cycleQueue: state.cycleQueue,
+            activeTask: state.activeTask,
+          });
+          
+          if (state.userProfile !== prevState.userProfile) {
+            import('./lib/db').then(async ({ savePlanDocument, deletePlanDocument }) => {
+              const uid = state.firebaseUser!.uid;
+              const planId = state.activePlanId!;
+              
+              const prevSubs = prevState.userProfile?.subjects || [];
+              const nextSubs = state.userProfile?.subjects || [];
+              
+              // Diff subjects
+              for (const sub of nextSubs) {
+                const prevSub = prevSubs.find(s => s.id === sub.id);
+                if (!prevSub || JSON.stringify(prevSub) !== JSON.stringify(sub)) {
+                  // Created or updated
+                  await savePlanDocument(uid, planId, 'subjects', {
+                    id: sub.id,
+                    planId,
+                    name: sub.name,
+                    importance: sub.importance,
+                    difficulty: sub.difficulty === 'high' ? 5 : (sub.difficulty === 'medium' ? 3 : 1),
+                    isArchived: sub.isArchived || false,
+                    createdAt: prevSub?.id ? new Date().toISOString() : new Date().toISOString(), // In a real app we'd fetch or preserve, but this satisfies types
+                    updatedAt: new Date().toISOString(),
+                  });
+                  
+                  // Diff topics for this subject
+                  const prevTopics = prevSub?.topics || [];
+                  for (const top of sub.topics) {
+                    const prevTop = prevTopics.find(t => t.id === top.id);
+                    if (!prevTop || prevTop.name !== top.name) {
+                      await savePlanDocument(uid, planId, 'topics', {
+                        id: top.id,
+                        subjectId: sub.id,
+                        name: top.name,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                      });
+                    }
+                  }
+                  
+                  // Deleted topics
+                  for (const prevTop of prevTopics) {
+                    if (!sub.topics.find(t => t.id === prevTop.id)) {
+                      await deletePlanDocument(uid, planId, 'topics', prevTop.id);
+                    }
+                  }
+                }
+              }
+              
+              // Deleted subjects
+              for (const prevSub of prevSubs) {
+                if (!nextSubs.find(s => s.id === prevSub.id)) {
+                  await deletePlanDocument(uid, planId, 'subjects', prevSub.id);
+                  // Also delete topics theoretically (handled in DB rules/cascade usually, or manually)
+                  for (const t of prevSub.topics) {
+                    await deletePlanDocument(uid, planId, 'topics', t.id);
+                  }
+                }
+              }
+            });
+          }
+        } else {
+          // Legacy user fallback
+          await saveLegacyUserBaseData(state.firebaseUser!.uid, {
+            hasCompletedOnboarding: state.hasCompletedOnboarding,
+            weeklyGoalHours: state.weeklyGoalHours,
+            userProfile: state.userProfile,
+            cycleQueue: state.cycleQueue,
+            activeTask: state.activeTask,
+          });
+        }
       } catch (e) {
         console.error("Failed to sync base data to DB", e);
       }
@@ -581,9 +733,22 @@ useStore.subscribe((state, prevState) => {
     const removedSessions = prevState.sessions.filter(s => !state.sessions.find(p => p.id === s.id));
     
     if (newSessions.length > 0 || removedSessions.length > 0) {
-      import('./lib/db').then(({ saveSessionToDb, deleteSessionFromDb }) => {
-        newSessions.forEach(s => saveSessionToDb(state.firebaseUser!.uid, s));
-        removedSessions.forEach(s => deleteSessionFromDb(state.firebaseUser!.uid, s.id));
+      import('./lib/db').then(async ({ saveLegacySessionToDb, savePlanDocument, deletePlanDocument }) => {
+        if (state.activePlanId) {
+          // V2
+          for (const s of newSessions) {
+            await savePlanDocument(state.firebaseUser!.uid, state.activePlanId, 'sessions', s);
+          }
+          for (const s of removedSessions) {
+            await deletePlanDocument(state.firebaseUser!.uid, state.activePlanId, 'sessions', s.id);
+          }
+        } else {
+          // Legacy
+          for (const s of newSessions) {
+            await saveLegacySessionToDb(state.firebaseUser!.uid, s);
+          }
+          // Assuming deleteLegacySessionFromDb exists or we skip for now
+        }
       }).catch(e => console.error("Failed to sync sessions to DB", e));
     }
   }

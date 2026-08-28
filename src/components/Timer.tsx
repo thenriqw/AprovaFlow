@@ -100,7 +100,9 @@ export default function Timer() {
     
     // Complete in cycle if it matches
     if (activeTask && activeTask.subject === subject && activeTask.topic === topic) {
-      completeCycleItem(subject, topic);
+      if (activeTask.id) {
+        completeCycleItem(activeTask.id);
+      }
       setActiveTask(null);
     }
     
