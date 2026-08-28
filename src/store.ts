@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { addDays, startOfWeek, format } from 'date-fns';
+import type { User as FirebaseUser } from 'firebase/auth';
 
 export type ErrorReason = 'teoria' | 'interpretacao' | 'tempo' | 'calculo' | 'atencao' | 'outro' | '';
 
@@ -80,6 +81,15 @@ interface ActiveTaskInfo {
 }
 
 interface AppState {
+  firebaseUser: FirebaseUser | null;
+  workspaceToken: string | null;
+  needsAuth: boolean;
+  authReady: boolean;
+  setFirebaseUser: (user: FirebaseUser | null) => void;
+  setWorkspaceToken: (token: string | null) => void;
+  setNeedsAuth: (needsAuth: boolean) => void;
+  setAuthReady: (authReady: boolean) => void;
+  
   sessions: StudySession[];
   cycleQueue: CycleItem[];
   activeTask: ActiveTaskInfo | null;
@@ -213,6 +223,15 @@ const defaultCycle: CycleItem[] = [];
 export const useStore = create<AppState>()(
   persist(
     (set) => ({
+      firebaseUser: null,
+      workspaceToken: null,
+      needsAuth: true,
+      authReady: false,
+      setFirebaseUser: (user) => set({ firebaseUser: user }),
+      setWorkspaceToken: (token) => set({ workspaceToken: token }),
+      setNeedsAuth: (needsAuth) => set({ needsAuth }),
+      setAuthReady: (authReady) => set({ authReady }),
+      
       sessions: [],
       cycleQueue: defaultCycle,
       activeTask: null,

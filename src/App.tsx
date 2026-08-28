@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Timer from './components/Timer';
@@ -9,9 +9,28 @@ import Settings from './components/Settings';
 import Onboarding from './components/Onboarding';
 import Subjects from './components/Subjects';
 import { useStore } from './store';
+import { initAuth } from './lib/firebase';
 
 function App() {
-  const { activeTab, setActiveTab, setActiveTask, hasCompletedOnboarding } = useStore();
+  const { activeTab, setActiveTab, setActiveTask, hasCompletedOnboarding, setAuthReady, setNeedsAuth, setFirebaseUser, setWorkspaceToken } = useStore();
+
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (user, token) => {
+        setFirebaseUser(user);
+        setWorkspaceToken(token);
+        setNeedsAuth(false);
+        setAuthReady(true);
+      },
+      () => {
+        setFirebaseUser(null);
+        setWorkspaceToken(null);
+        setNeedsAuth(true);
+        setAuthReady(true);
+      }
+    );
+    return () => unsubscribe();
+  }, [setFirebaseUser, setWorkspaceToken, setNeedsAuth, setAuthReady]);
 
   const navigateToTimer = (taskItem: any) => {
     setActiveTask(taskItem);
