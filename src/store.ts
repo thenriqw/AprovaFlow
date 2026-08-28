@@ -127,6 +127,8 @@ interface AppState {
   deleteTopic: (subjectId: string, topicId: string) => void;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  setActivePlan: (planId: string) => void;
+  switchPlan: (planId: string) => Promise<void>;
 }
 
 // (Block removed from here, moving down)
@@ -258,7 +260,7 @@ const defaultCycle: CycleItem[] = [];
 
 export const useStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       firebaseUser: null,
       authReady: false,
       dbLoaded: false,
@@ -299,8 +301,70 @@ export const useStore = create<AppState>()(
       weeklyGoalHours: 25,
       hasCompletedOnboarding: false,
       userProfile: null,
-      activeTab: 'dashboard',
+      activeTab: 'today',
       setActiveTab: (tab) => set({ activeTab: tab }),
+      setActivePlan: (planId) => set({ activePlanId: planId }),
+      switchPlan: async (planId) => {
+        const state = get();
+        if (!state.firebaseUser) {
+          set({ activePlanId: planId });
+          return;
+        }
+        
+        try {
+          const { loadPlanData } = await import('./lib/db');
+          const { doc, writeBatch } = await import('firebase/firestore');
+          const { db } = await import('./lib/firebase');
+          
+          const planFullData = await loadPlanData(state.firebaseUser.uid, planId);
+          const activePlan = state.plans.find(p => p.id === planId);
+          
+          const bridgedProfile = activePlan ? {
+            objective: activePlan.objective, examName: "",
+            examDate: activePlan.examDate,
+            availableTimePerDay: activePlan.availableTimePerDay,
+            subjects: planFullData.subjects.map(s => ({
+              id: s.id,
+              name: s.name,
+              difficulty: (s.difficulty >= 4 ? 'high' : (s.difficulty >= 3 ? 'medium' : 'low')) as 'high' | 'medium' | 'low',
+              importance: s.importance,
+              isArchived: s.isArchived,
+              topics: planFullData.topics.filter(t => t.subjectId === s.id).map(t => ({ id: t.id, name: t.name }))
+            }))
+          } : null;
+
+          // Update active plan in user doc
+          const batch = writeBatch(db);
+          batch.update(doc(db, 'users', state.firebaseUser.uid), { activePlanId: planId });
+          await batch.commit();
+
+          set({
+            activePlanId: planId,
+            v2Subjects: planFullData.subjects,
+            v2Topics: planFullData.topics,
+            v2Activities: planFullData.activities,
+            sessions: planFullData.sessions.map((s: any) => ({
+              id: s.id,
+              subjectId: s.subjectId,
+              topicId: s.topicId,
+              subject: planFullData.subjects.find(sub => sub.id === s.subjectId)?.name || '',
+              topic: planFullData.topics.find(t => t.id === s.topicId)?.name || '',
+              activityType: s.activityType,
+              source: s.source,
+              durationSeconds: s.durationSeconds,
+              questionsTotal: s.questionsTotal || 0,
+              questionsCorrect: s.questionsCorrect || 0,
+              errorReason: s.errorReason || '',
+              date: s.date
+            })),
+            ...(bridgedProfile ? { userProfile: bridgedProfile } : {})
+          });
+        } catch (error) {
+          console.error("Failed to switch plan:", error);
+          // Fallback just state change
+          set({ activePlanId: planId });
+        }
+      },
       addSession: (session) => set((state) => ({
         sessions: [
           ...state.sessions,
@@ -496,23 +560,27 @@ export const useStore = create<AppState>()(
           });
 
           // Save everything to DB immediately via batch
-          import('./lib/firebase').then(({ db }) => {
-            import('firebase/firestore').then(async ({ writeBatch, doc }) => {
-              const batch = writeBatch(db);
-              batch.set(doc(db, 'users', uid, 'plans', newPlanId!), newPlan);
-              v2Subjects.forEach(s => batch.set(doc(db, 'users', uid, 'plans', newPlanId!, 'subjects', s.id), s));
-              v2Topics.forEach(t => batch.set(doc(db, 'users', uid, 'plans', newPlanId!, 'topics', t.id), t));
-              
-              const weeklyGoal = Object.values(profile.availableTimePerDay).reduce((a, b) => a + b, 0);
-              batch.set(doc(db, 'users', uid), { 
-                hasCompletedOnboarding: true,
-                activePlanId: newPlanId,
-                weeklyGoalHours: weeklyGoal
-              }, { merge: true });
-              
-              await batch.commit();
-            });
-          }).catch(console.error);
+          try {
+            const { db } = await import('./lib/firebase');
+            const { writeBatch, doc } = await import('firebase/firestore');
+            
+            const batch = writeBatch(db);
+            batch.set(doc(db, 'users', uid, 'plans', newPlanId!), newPlan);
+            v2Subjects.forEach(s => batch.set(doc(db, 'users', uid, 'plans', newPlanId!, 'subjects', s.id), s));
+            v2Topics.forEach(t => batch.set(doc(db, 'users', uid, 'plans', newPlanId!, 'topics', t.id), t));
+            
+            const weeklyGoal = Object.values(profile.availableTimePerDay).reduce((a, b) => a + b, 0);
+            batch.set(doc(db, 'users', uid), { 
+              hasCompletedOnboarding: true,
+              activePlanId: newPlanId,
+              weeklyGoalHours: weeklyGoal
+            }, { merge: true });
+            
+            await batch.commit();
+          } catch (e) {
+            console.error("Failed to persist onboarding data", e);
+            throw new Error("Não foi possível salvar seu plano. Tente novamente.");
+          }
         }
         
         set({ 

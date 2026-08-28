@@ -1,6 +1,6 @@
 {
-  "name": "AprovaFlow - Plataforma de Estudos",
-  "description": "Plataforma de alta performance para vestibulandos e concurseiros com Modo Livre, Ciclos Adaptativos, Caderno de Erros Diagnóstico e Importador com IA.",
+  "name": "éFederal",
+  "description": "GPS de estudos e preparação de alta performance.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

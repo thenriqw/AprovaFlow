@@ -1,231 +1,105 @@
 import React, { useState } from 'react';
-import { useStore, UserProfile, SubjectConfig } from '../store';
+import { Target, FileText, Settings, Play } from 'lucide-react';
+import { useStore } from '../store';
 import { APP_NAME } from '../config/constants';
-import { ChevronRight, Plus, Trash2 } from 'lucide-react';
-import { cn } from '../lib/utils';
 
 export default function Onboarding() {
-  const { completeOnboarding, skipOnboarding, recalculateRoute } = useStore();
-  const [step, setStep] = useState(1);
-  const [profile, setProfile] = useState<UserProfile>({
-    objective: '',
-    examName: '',
-    examDate: '',
-    availableTimePerDay: { 1: 2, 2: 2, 3: 2, 4: 2, 5: 2 }, // default Mon-Fri 2h
-    subjects: []
-  });
-  
-  const [newSubject, setNewSubject] = useState<Omit<SubjectConfig, 'id' | 'topics'> & { topics?: any[] }>({ name: '', difficulty: 'medium', importance: 3 });
+  const { completeOnboarding } = useStore();
+  const [step, setStep] = useState<'options' | 'loading'>('options');
 
-  const handleNext = () => setStep(s => s + 1);
-  const handleBack = () => setStep(s => s - 1);
+  const handleSelectPath = async (path: string) => {
+    setStep('loading');
+    
+    // For now, we will create a generic blank plan for all, except "free" which just finishes onboarding.
+    // In next steps, this will route to specific setups.
+    const defaultProfile = {
+      objective: path === 'free' ? 'Modo Livre' : 'Meu Novo Plano',
+      examName: '', examDate: '',
+      availableTimePerDay: { 0: 3, 1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3 },
+      subjects: []
+    };
 
-  const setDayHours = (day: number, hours: number) => {
-    setProfile(p => {
-      const newTime = { ...p.availableTimePerDay };
-      if (hours <= 0) {
-        delete newTime[day];
-      } else {
-        newTime[day] = hours;
-      }
-      return { ...p, availableTimePerDay: newTime };
-    });
-  };
-
-  const addSubject = () => {
-    if (newSubject.name.trim()) {
-      setProfile(p => ({ ...p, subjects: [...p.subjects, { ...newSubject, id: crypto.randomUUID(), topics: [] }] }));
-      setNewSubject({ name: '', difficulty: 'medium', importance: 3 });
+    try {
+      await completeOnboarding(defaultProfile);
+    } catch (e) {
+      console.error(e);
+      setStep('options');
+      alert("Erro ao criar plano. Tente novamente.");
     }
   };
 
-  const removeSubject = (index: number) => {
-    setProfile(p => ({
-      ...p,
-      subjects: p.subjects.filter((_, i) => i !== index)
-    }));
-  };
-
-  const finish = () => {
-    completeOnboarding(profile);
-    recalculateRoute();
-  };
-
-  const daysOfWeek = [
-    { value: 0, label: 'D' },
-    { value: 1, label: 'S' },
-    { value: 2, label: 'T' },
-    { value: 3, label: 'Q' },
-    { value: 4, label: 'Q' },
-    { value: 5, label: 'S' },
-    { value: 6, label: 'S' },
-  ];
+  if (step === 'loading') {
+    return (
+      <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-6">
+        <div className="flex flex-col items-center">
+          <div className="w-8 h-8 border-4 border-neutral-900 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-neutral-500 font-medium">Preparando seu ambiente...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-6 font-sans">
-      <div className="max-w-xl w-full bg-neutral-900 border border-neutral-800 rounded-3xl p-8 md:p-12 shadow-2xl relative overflow-hidden">
-        
-        {/* Decorator */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-neutral-800 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none opacity-50" />
-        
-        <div className="relative z-10">
-          <div className="mb-10 text-center">
-            <h1 className="text-3xl font-black tracking-tight">{APP_NAME}</h1>
-            <p className="text-neutral-400 mt-2">Configure sua rotina para gerarmos um ciclo adaptativo preciso.</p>
-          </div>
+    <div className="min-h-screen bg-neutral-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
+        <h2 className="text-4xl font-serif font-bold text-neutral-900 tracking-tight">Como você quer começar?</h2>
+        <p className="mt-3 text-neutral-500 text-lg">Escolha o caminho que melhor se adapta a você.</p>
+      </div>
 
-          {step === 1 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-              <div>
-                <label className="block text-sm font-semibold text-neutral-300 mb-2">Qual seu objetivo principal?</label>
-                <select 
-                  className="w-full p-4 bg-neutral-950 rounded-xl border border-neutral-800 text-white focus:outline-none focus:border-neutral-500"
-                  value={profile.objective}
-                  onChange={e => setProfile({...profile, objective: e.target.value})}
-                >
-                  <option value="">Selecione...</option>
-                  <option value="ENEM">ENEM</option>
-                  <option value="Vestibular">Vestibular Tradicional</option>
-                  <option value="Concurso">Concurso Público</option>
-                  <option value="Faculdade">Faculdade / Pesquisa</option>
-                  <option value="Outro">Outro</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-neutral-300 mb-2">Nome da prova / Edital</label>
-                <input 
-                  type="text" 
-                  placeholder="Ex: ENEM 2026, Polícia Federal..."
-                  className="w-full p-4 bg-neutral-950 rounded-xl border border-neutral-800 text-white focus:outline-none focus:border-neutral-500"
-                  value={profile.examName}
-                  onChange={e => setProfile({...profile, examName: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-neutral-300 mb-2">Data prevista (opcional)</label>
-                <input 
-                  type="date" 
-                  className="w-full p-4 bg-neutral-950 rounded-xl border border-neutral-800 text-white focus:outline-none focus:border-neutral-500"
-                  value={profile.examDate}
-                  onChange={e => setProfile({...profile, examDate: e.target.value})}
-                />
-              </div>
+      <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-xl">
+        <div className="bg-white py-8 px-4 shadow-sm border border-neutral-200 rounded-3xl sm:px-10 grid gap-4">
+          
+          <button 
+            onClick={() => handleSelectPath('objective')}
+            className="flex items-start gap-4 p-5 rounded-2xl border border-neutral-200 hover:border-neutral-900 hover:bg-neutral-50 transition-all text-left group"
+          >
+            <div className="w-12 h-12 bg-neutral-100 group-hover:bg-neutral-900 text-neutral-600 group-hover:text-white rounded-xl flex items-center justify-center flex-shrink-0 transition-colors">
+              <Target size={24} />
             </div>
-          )}
-
-          {step === 2 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-              <div>
-                <label className="block text-sm font-semibold text-neutral-300 mb-4">Horas disponíveis por dia</label>
-                <div className="space-y-3">
-                  {daysOfWeek.map(day => (
-                    <div key={day.value} className="flex items-center justify-between gap-4 bg-neutral-950 p-3 rounded-xl border border-neutral-800">
-                      <span className="font-bold text-neutral-300 w-8">{day.label}</span>
-                      <input 
-                        type="range" 
-                        min="0" max="14" 
-                        className="flex-1 h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-white"
-                        value={profile.availableTimePerDay[day.value] || 0}
-                        onChange={e => setDayHours(day.value, parseInt(e.target.value))}
-                      />
-                      <span className="font-bold text-white w-12 text-right">
-                        {profile.availableTimePerDay[day.value] || 0}h
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-sm font-bold text-neutral-400 mt-6 text-center">
-                  Meta gerada: <span className="text-white">{Object.values(profile.availableTimePerDay).reduce((a: any, b: any) => a + b, 0)}h semanais</span>
-                </p>
-              </div>
+            <div>
+              <h3 className="text-lg font-semibold text-neutral-900">Tenho uma prova ou objetivo</h3>
+              <p className="text-sm text-neutral-500 mt-1 leading-relaxed">Já sabe o que quer? Vamos ajudar a calcular sua demanda.</p>
             </div>
-          )}
+          </button>
 
-          {step === 3 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-              <div>
-                <label className="block text-sm font-semibold text-neutral-300 mb-2">Adicionar Matérias Iniciais (Opcional)</label>
-                <div className="flex gap-2 mb-4">
-                  <input 
-                    type="text" 
-                    placeholder="Ex: Matemática"
-                    className="flex-1 p-3 bg-neutral-950 rounded-xl border border-neutral-800 text-white focus:outline-none focus:border-neutral-500"
-                    value={newSubject.name}
-                    onChange={e => setNewSubject({...newSubject, name: e.target.value})}
-                  />
-                  <select 
-                    className="p-3 bg-neutral-950 rounded-xl border border-neutral-800 text-white focus:outline-none"
-                    value={newSubject.difficulty}
-                    onChange={e => setNewSubject({...newSubject, difficulty: e.target.value as any})}
-                    title="Dificuldade"
-                  >
-                    <option value="low">Fácil</option>
-                    <option value="medium">Média</option>
-                    <option value="high">Difícil</option>
-                  </select>
-                  <button 
-                    onClick={addSubject}
-                    className="p-3 bg-white text-neutral-900 rounded-xl font-bold hover:bg-neutral-200"
-                  >
-                    <Plus size={20} />
-                  </button>
-                </div>
-                
-                <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                  {profile.subjects.map((sub, idx) => (
-                    <div key={idx} className="flex justify-between items-center p-3 bg-neutral-800 rounded-lg">
-                      <span className="font-medium text-sm">{sub.name}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-neutral-400 capitalize">{sub.difficulty}</span>
-                        <button onClick={() => removeSubject(idx)} className="text-neutral-500 hover:text-red-400">
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {profile.subjects.length === 0 && (
-                    <p className="text-center text-neutral-500 text-sm py-4">Nenhuma matéria adicionada ainda.</p>
-                  )}
-                </div>
-              </div>
+          <button 
+            onClick={() => handleSelectPath('import')}
+            className="flex items-start gap-4 p-5 rounded-2xl border border-neutral-200 hover:border-neutral-900 hover:bg-neutral-50 transition-all text-left group"
+          >
+            <div className="w-12 h-12 bg-neutral-100 group-hover:bg-neutral-900 text-neutral-600 group-hover:text-white rounded-xl flex items-center justify-center flex-shrink-0 transition-colors">
+              <FileText size={24} />
             </div>
-          )}
+            <div>
+              <h3 className="text-lg font-semibold text-neutral-900">Tenho um edital ou cronograma</h3>
+              <p className="text-sm text-neutral-500 mt-1 leading-relaxed">Importe PDFs ou planilhas para gerar seu plano automaticamente.</p>
+            </div>
+          </button>
 
-          <div className="mt-10 flex gap-4">
-            {step > 1 && (
-              <button 
-                onClick={handleBack}
-                className="px-6 py-4 rounded-xl text-neutral-400 hover:text-white font-bold transition-colors"
-              >
-                Voltar
-              </button>
-            )}
-            
-            {step < 3 ? (
-              <button 
-                onClick={handleNext}
-                className="flex-1 py-4 bg-white text-neutral-900 font-bold rounded-xl hover:bg-neutral-200 transition-colors flex justify-center items-center gap-2"
-              >
-                Continuar <ChevronRight size={20} />
-              </button>
-            ) : (
-              <button 
-                onClick={finish}
-                className="flex-1 py-4 bg-white text-neutral-900 font-bold rounded-xl hover:bg-neutral-200 transition-colors flex justify-center items-center gap-2"
-              >
-                Finalizar Configuração <ChevronRight size={20} />
-              </button>
-            )}
-          </div>
+          <button 
+            onClick={() => handleSelectPath('manual')}
+            className="flex items-start gap-4 p-5 rounded-2xl border border-neutral-200 hover:border-neutral-900 hover:bg-neutral-50 transition-all text-left group"
+          >
+            <div className="w-12 h-12 bg-neutral-100 group-hover:bg-neutral-900 text-neutral-600 group-hover:text-white rounded-xl flex items-center justify-center flex-shrink-0 transition-colors">
+              <Settings size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-neutral-900">Quero montar meu plano</h3>
+              <p className="text-sm text-neutral-500 mt-1 leading-relaxed">Adicione matérias e tópicos manualmente, do seu jeito.</p>
+            </div>
+          </button>
 
-          <div className="mt-6 text-center">
-            <button 
-              onClick={skipOnboarding}
-              className="text-xs text-neutral-500 hover:text-neutral-300 underline underline-offset-4"
-            >
-              Pular por enquanto. O ciclo será menos preciso sem a configuração inicial.
-            </button>
-          </div>
+          <button 
+            onClick={() => handleSelectPath('free')}
+            className="flex items-start gap-4 p-5 rounded-2xl border border-neutral-200 hover:border-neutral-900 hover:bg-neutral-50 transition-all text-left group"
+          >
+            <div className="w-12 h-12 bg-neutral-100 group-hover:bg-neutral-900 text-neutral-600 group-hover:text-white rounded-xl flex items-center justify-center flex-shrink-0 transition-colors">
+              <Play size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-neutral-900">Só quero registrar meus estudos</h3>
+              <p className="text-sm text-neutral-500 mt-1 leading-relaxed">Comece agora e organize seu plano depois.</p>
+            </div>
+          </button>
 
         </div>
       </div>

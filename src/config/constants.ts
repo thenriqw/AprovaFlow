@@ -1,1 +1,1 @@
-export const APP_NAME = "AprovaFlow";
+export const APP_NAME = "éFederal";

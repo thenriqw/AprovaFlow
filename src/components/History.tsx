@@ -5,7 +5,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Trash2, CalendarDays } from 'lucide-react';
 
-export default function History() {
+export default function History({ hideHeader = false }: { hideHeader?: boolean }) {
   const { sessions, removeSession } = useStore();
 
   const sortedSessions = [...sessions].sort((a, b) => 
@@ -13,11 +13,13 @@ export default function History() {
   );
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight text-neutral-900">Histórico de Estudos</h1>
-        <p className="text-neutral-500 mt-1">Seu diário completo de horas líquidas e resoluções.</p>
-      </header>
+    <div className={`max-w-4xl mx-auto ${hideHeader ? '' : 'space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500'}`}>
+      {!hideHeader && (
+        <header>
+          <h1 className="text-3xl font-bold tracking-tight text-neutral-900">Histórico de Estudos</h1>
+          <p className="text-neutral-500 mt-1">Seu diário completo de horas líquidas e resoluções.</p>
+        </header>
+      )}
 
       <div className="bg-white rounded-3xl border border-neutral-200 shadow-sm overflow-hidden">
         {sortedSessions.length === 0 ? (

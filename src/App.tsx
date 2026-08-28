@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import Layout from './components/Layout';
-import Dashboard from './components/Dashboard';
+import Today from './components/Today';
 import Timer from './components/Timer';
-import CycleManager from './components/Cycle';
-import Importer from './components/Importer';
-import History from './components/History';
+import PlanOverview from './components/PlanOverview';
+import Inbox from './components/Inbox';
+import Progress from './components/Progress';
 import Settings from './components/Settings';
 import Onboarding from './components/Onboarding';
-import Subjects from './components/Subjects';
+import Content from './components/Content';
 import { useStore } from './store';
+import { APP_NAME } from './config/constants';
 import { initAuth, googleSignIn } from './lib/firebase';
 import { getUserConfig, loadPlanData, getPlans, getLegacyUserData, saveLegacyUserBaseData, saveLegacySessionToDb } from './lib/db';
 import { migrateLegacyToV2 } from './lib/migration';
@@ -76,7 +77,7 @@ function App() {
                   subjects: planFullData.subjects.map(s => ({
                     id: s.id,
                     name: s.name,
-                    difficulty: s.difficulty >= 4 ? 'high' : (s.difficulty >= 3 ? 'medium' : 'low'),
+                    difficulty: (s.difficulty >= 4 ? 'high' : (s.difficulty >= 3 ? 'medium' : 'low')) as 'high' | 'medium' | 'low',
                     importance: s.importance,
                     isArchived: s.isArchived,
                     topics: planFullData.topics.filter(t => t.subjectId === s.id).map(t => ({ id: t.id, name: t.name }))
@@ -89,7 +90,20 @@ function App() {
                   v2Subjects: planFullData.subjects,
                   v2Topics: planFullData.topics,
                   v2Activities: planFullData.activities,
-                  sessions: planFullData.sessions,
+                  sessions: planFullData.sessions.map((s: any) => ({
+                    id: s.id,
+                    subjectId: s.subjectId,
+                    topicId: s.topicId,
+                    subject: planFullData.subjects.find(sub => sub.id === s.subjectId)?.name || '',
+                    topic: planFullData.topics.find(t => t.id === s.topicId)?.name || '',
+                    activityType: s.activityType,
+                    source: s.source,
+                    durationSeconds: s.durationSeconds,
+                    questionsTotal: s.questionsTotal || 0,
+                    questionsCorrect: s.questionsCorrect || 0,
+                    errorReason: s.errorReason || '',
+                    date: s.date
+                  })),
                   userProfile: bridgedProfile,
                   // We could recalculate cycleQueue here, but store handles it if we syncCycleWithSubjects
                 };
@@ -155,7 +169,7 @@ function App() {
             subjects: planFullData.subjects.map(s => ({
               id: s.id,
               name: s.name,
-              difficulty: s.difficulty >= 4 ? 'high' : (s.difficulty >= 3 ? 'medium' : 'low'),
+              difficulty: (s.difficulty >= 4 ? 'high' : (s.difficulty >= 3 ? 'medium' : 'low')) as 'high' | 'medium' | 'low',
               importance: s.importance,
               isArchived: s.isArchived,
               topics: planFullData.topics.filter(t => t.subjectId === s.id).map(t => ({ id: t.id, name: t.name }))
@@ -169,7 +183,20 @@ function App() {
             v2Subjects: planFullData.subjects, 
             v2Topics: planFullData.topics, 
             v2Activities: planFullData.activities, 
-            sessions: planFullData.sessions,
+            sessions: planFullData.sessions.map((s: any) => ({
+              id: s.id,
+              subjectId: s.subjectId,
+              topicId: s.topicId,
+              subject: planFullData.subjects.find(sub => sub.id === s.subjectId)?.name || '',
+              topic: planFullData.topics.find(t => t.id === s.topicId)?.name || '',
+              activityType: s.activityType,
+              source: s.source,
+              durationSeconds: s.durationSeconds,
+              questionsTotal: s.questionsTotal || 0,
+              questionsCorrect: s.questionsCorrect || 0,
+              errorReason: s.errorReason || '',
+              date: s.date
+            })),
             userProfile: bridgedProfile
           });
         }
@@ -216,7 +243,7 @@ function App() {
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
           </div>
           <div>
-            <h1 className="text-2xl font-black text-neutral-900">AprovaFlow</h1>
+            <h1 className="text-3xl font-serif font-bold text-neutral-900">{APP_NAME}</h1>
             <p className="text-neutral-500 mt-2">O GPS inteligente para seus estudos.</p>
           </div>
           <button 
@@ -269,15 +296,23 @@ function App() {
     return <Onboarding />;
   }
 
+  // Ensure activeTab is valid for V2
+  const currentTab = ['dashboard', 'cycle', 'subjects', 'import', 'history'].includes(activeTab) 
+    ? (activeTab === 'dashboard' || activeTab === 'cycle' ? 'today' : 
+       activeTab === 'subjects' ? 'content' :
+       activeTab === 'import' ? 'inbox' :
+       activeTab === 'history' ? 'progress' : activeTab)
+    : activeTab;
+
   return (
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
-      {activeTab === 'dashboard' && <Dashboard />}
-      {activeTab === 'timer' && <Timer />}
-      {activeTab === 'cycle' && <CycleManager onStartTask={navigateToTimer} />}
-      {activeTab === 'subjects' && <Subjects />}
-      {activeTab === 'import' && <Importer />}
-      {activeTab === 'history' && <History />}
-      {activeTab === 'settings' && <Settings />}
+    <Layout activeTab={currentTab} setActiveTab={setActiveTab}>
+      {currentTab === 'today' && <Today />}
+      {currentTab === 'plan' && <PlanOverview />}
+      {currentTab === 'content' && <Content />}
+      {currentTab === 'inbox' && <Inbox />}
+      {currentTab === 'progress' && <Progress />}
+      {currentTab === 'timer' && <Timer />}
+      {currentTab === 'settings' && <Settings />}
     </Layout>
   );
 }
