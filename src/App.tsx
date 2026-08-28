@@ -13,8 +13,8 @@ import { useStore } from './store';
 function App() {
   const { activeTab, setActiveTab, setActiveTask, hasCompletedOnboarding } = useStore();
 
-  const navigateToTimer = (subject: string, topic: string) => {
-    setActiveTask({ subject, topic });
+  const navigateToTimer = (taskItem: any) => {
+    setActiveTask(taskItem);
     setActiveTab('timer');
   };
 

@@ -5,7 +5,7 @@ import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function Onboarding() {
-  const { completeOnboarding, skipOnboarding } = useStore();
+  const { completeOnboarding, skipOnboarding, recalculateRoute } = useStore();
   const [step, setStep] = useState(1);
   const [profile, setProfile] = useState<UserProfile>({
     objective: '',
@@ -15,7 +15,7 @@ export default function Onboarding() {
     subjects: []
   });
   
-  const [newSubject, setNewSubject] = useState<Omit<SubjectConfig, 'id' | 'topics'>>({ name: '', difficulty: 'medium', importance: 3 });
+  const [newSubject, setNewSubject] = useState<Omit<SubjectConfig, 'id' | 'topics'> & { topics?: any[] }>({ name: '', difficulty: 'medium', importance: 3 });
 
   const handleNext = () => setStep(s => s + 1);
   const handleBack = () => setStep(s => s - 1);
@@ -48,6 +48,7 @@ export default function Onboarding() {
 
   const finish = () => {
     completeOnboarding(profile);
+    recalculateRoute();
   };
 
   const daysOfWeek = [

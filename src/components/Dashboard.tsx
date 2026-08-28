@@ -88,22 +88,22 @@ export default function Dashboard() {
 
       {hasNoData && (
         <div className="bg-white p-8 rounded-3xl border border-neutral-200 shadow-sm text-center">
-          <h2 className="text-xl font-bold text-neutral-900 mb-2">Bem-vindo(a) ao seu novo ambiente de estudos!</h2>
+          <h2 className="text-xl font-bold text-neutral-900 mb-2">Bem-vindo(a) ao seu ambiente de estudos!</h2>
           <p className="text-neutral-500 mb-6">Parece que você ainda não registrou nenhuma sessão. Vamos começar?</p>
           <div className="flex flex-col sm:flex-row justify-center gap-4">
-            {!hasCycle && (
-              <button onClick={() => useStore.getState().setActiveTab('settings')} className="px-6 py-3 bg-neutral-900 text-white font-bold rounded-xl hover:bg-neutral-800 transition-all">
-                Configurar meu plano
+            {!hasSubjects && (
+              <button onClick={() => useStore.getState().setActiveTab('subjects')} className="px-6 py-3 bg-neutral-900 text-white font-bold rounded-xl hover:bg-neutral-800 transition-all">
+                Adicionar matérias
+              </button>
+            )}
+            {hasSubjects && !hasCycle && (
+              <button onClick={() => useStore.getState().setActiveTab('import')} className="px-6 py-3 bg-neutral-900 text-white font-bold rounded-xl hover:bg-neutral-800 transition-all">
+                Gerar meu ciclo
               </button>
             )}
             {hasCycle && (
-              <button onClick={() => useStore.getState().setActiveTab('timer')} className="px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all">
+              <button onClick={() => useStore.getState().setActiveTab('cycle')} className="px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all">
                 Iniciar primeiro estudo
-              </button>
-            )}
-            {!hasSubjects && !hasCycle && (
-              <button onClick={() => useStore.getState().setActiveTab('settings')} className="px-6 py-3 bg-neutral-100 text-neutral-900 font-bold rounded-xl hover:bg-neutral-200 transition-all">
-                Adicionar matérias
               </button>
             )}
           </div>
@@ -203,11 +203,9 @@ export default function Dashboard() {
             />
           </div>
           <p className="text-xs text-neutral-400 mt-3 text-center">
-            {theoryPercent > 70 
-              ? "Você está passando muito tempo na teoria. Tente resolver mais questões para fixar o conteúdo." 
-              : practicePercent > 70 
-                ? "Ótimo foco na prática! Lembre-se de revisar a teoria quando a taxa de acertos cair."
-                : "Excelente equilíbrio entre teoria e prática."}
+            {totalTheoryPractice < 3600 // less than 1 hour of data
+              ? "Ainda há poucos registros para gerar uma recomendação confiável."
+              : `Seu tempo registrado está distribuído em aproximadamente ${theoryPercent}% teoria e ${practicePercent}% prática.`}
           </p>
         </section>
 

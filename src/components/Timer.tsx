@@ -69,7 +69,23 @@ export default function Timer() {
   };
 
   const saveSession = () => {
+    let currentSubjectId = activeTask?.subjectId;
+    let currentTopicId = activeTask?.topicId;
+
+    if (!currentSubjectId && userProfile) {
+      const foundSubj = userProfile.subjects.find(s => s.name === subject);
+      if (foundSubj) {
+        currentSubjectId = foundSubj.id;
+        const foundTopic = foundSubj.topics.find(t => t.name === topic);
+        if (foundTopic) {
+          currentTopicId = foundTopic.id;
+        }
+      }
+    }
+
     addSession({
+      subjectId: currentSubjectId,
+      topicId: currentTopicId,
       subject: subject || 'Livre',
       topic,
       activityType,

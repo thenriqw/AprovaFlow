@@ -210,7 +210,7 @@ function fallbackParseEdital(rawText: string, targetExam?: string) {
   
   const palette = ["#3B82F6", "#10B981", "#8B5CF6", "#F59E0B", "#EC4899", "#06B6D4", "#6366F1", "#14B8A6", "#E11D48"];
   let colorIndex = 0;
-  let currentSubject = "Conteúdo Geral";
+  let currentSubject = ""; // Start without a generic subject
 
   // Common subjects keywords
   const subjectKeywords = [
@@ -234,7 +234,7 @@ function fallbackParseEdital(rawText: string, targetExam?: string) {
       currentSubject = matchedSubject;
       if (!subjectsMap[currentSubject]) {
         subjectsMap[currentSubject] = {
-          weight: Math.floor(Math.random() * 3) + 2,
+          weight: 3, // Default to 3, no random
           color: palette[colorIndex % palette.length],
           topics: []
         };
@@ -243,17 +243,10 @@ function fallbackParseEdital(rawText: string, targetExam?: string) {
       continue;
     }
 
-    // Treat numbered items, bullets or comma separated items as topics
-    if (!subjectsMap[currentSubject]) {
-      subjectsMap[currentSubject] = {
-        weight: 3,
-        color: palette[colorIndex % palette.length],
-        topics: []
-      };
-      colorIndex++;
-    }
+    if (!currentSubject) continue; // Ignore topics before any subject is found
 
     const cleanLine = line.replace(/^[0-9]+(\.[0-9]+)*[\s\-\:]+/, '').replace(/^[\-\•\*\–]\s*/, '').trim();
+
     if (cleanLine.length > 3 && cleanLine.length < 120) {
       if (cleanLine.includes(";") || cleanLine.includes(",")) {
         const subItems = cleanLine.split(/[;,]/).map(s => s.trim()).filter(s => s.length > 3);
@@ -278,38 +271,8 @@ function fallbackParseEdital(rawText: string, targetExam?: string) {
     name,
     weight: data.weight,
     color: data.color,
-    topics: data.topics.length > 0 ? data.topics.slice(0, 15) : [
-      { title: "Fundamentos e Conceitos Básicos", estimatedHours: 2, importance: "ALTA" },
-      { title: "Resolução de Exercícios e Questões da Banca", estimatedHours: 3, importance: "ALTA" },
-      { title: "Revisão e Aprofundamento", estimatedHours: 1.5, importance: "MEDIA" }
-    ]
+    topics: data.topics
   }));
-
-  if (results.length === 0) {
-    return [
-      {
-        name: "Língua Portuguesa",
-        weight: 3,
-        color: "#3B82F6",
-        topics: [
-          { title: "Interpretação e Compreensão de Textos", estimatedHours: 3, importance: "ALTA" },
-          { title: "Sintaxe da Oração e do Período", estimatedHours: 2.5, importance: "ALTA" },
-          { title: "Concordância Verbal e Nominal", estimatedHours: 2, importance: "MEDIA" },
-          { title: "Regência e Uso do Sinal Indicativo de Crase", estimatedHours: 2, importance: "ALTA" }
-        ]
-      },
-      {
-        name: "Raciocínio Lógico e Matemática",
-        weight: 4,
-        color: "#10B981",
-        topics: [
-          { title: "Lógica Proposicional e Conectivos", estimatedHours: 3, importance: "ALTA" },
-          { title: "Análise Combinatória e Probabilidade", estimatedHours: 4, importance: "ALTA" },
-          { title: "Regra de Três e Porcentagem", estimatedHours: 2, importance: "MEDIA" }
-        ]
-      }
-    ];
-  }
 
   return results;
 }

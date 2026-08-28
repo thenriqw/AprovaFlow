@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { useStore, CycleItem } from '../store';
-import { Wand2, FileText, CheckCircle2, AlertTriangle, RefreshCcw, Save } from 'lucide-react';
+import { useStore, CycleItem, SubjectConfig, TopicConfig } from '../store';
+import { Wand2, FileText, CheckCircle2, AlertTriangle, Save, Trash2, Plus, Edit2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function Importer() {
-  const { setCycleQueue, cycleQueue, setActiveTab } = useStore();
+  const { setCycleQueue, cycleQueue, setActiveTab, userProfile, updateUserProfile, syncCycleWithSubjects } = useStore();
   const [text, setText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState('');
-  const [reviewData, setReviewData] = useState<CycleItem[] | null>(null);
+  
+  // Review state
+  const [reviewSubjects, setReviewSubjects] = useState<(Omit<SubjectConfig, 'id'> & { id?: string })[] | null>(null);
 
   const handleImport = async () => {
     if (text.length > 20000) {
@@ -26,7 +28,7 @@ export default function Importer() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           editalText: text,
-          targetExam: useStore.getState().userProfile?.examName || 'Geral',
+          targetExam: userProfile?.examName || 'Geral',
           availableWeeklyHours: useStore.getState().weeklyGoalHours || 25
         })
       });
@@ -37,25 +39,20 @@ export default function Importer() {
         throw new Error(data.message || 'Erro ao processar');
       }
 
-      // Convert from API format to CycleItem format
-      let parsedItems: CycleItem[] = [];
-      data.subjects.forEach((subj: any) => {
-        subj.topics.forEach((topic: any) => {
-          parsedItems.push({
-            id: crypto.randomUUID(),
-            subject: subj.name,
-            topic: topic.title,
-            weight: subj.weight || 3,
-            status: 'pending'
-          });
-        });
-      });
-
-      if (parsedItems.length > 0) {
-        parsedItems[0].status = 'next';
+      if (!data.subjects || data.subjects.length === 0) {
+        setError('Não foi possível interpretar este conteúdo com segurança. Revise o texto e tente novamente.');
+        return;
       }
 
-      setReviewData(parsedItems);
+      const parsed: (Omit<SubjectConfig, 'id'> & { id?: string })[] = data.subjects.map((s: any) => ({
+        id: crypto.randomUUID(),
+        name: s.name,
+        difficulty: 'medium',
+        importance: s.weight || 3,
+        topics: s.topics.map((t: any) => ({ id: crypto.randomUUID(), name: t.title }))
+      }));
+
+      setReviewSubjects(parsed);
     } catch (err: any) {
       console.error(err);
       setError('Falha ao comunicar com o servidor. A IA pode estar indisponível.');
@@ -64,22 +61,66 @@ export default function Importer() {
     }
   };
 
-  const confirmImport = () => {
-    if (!reviewData) return;
+  const updateSubjectField = (index: number, field: string, value: any) => {
+    setReviewSubjects(prev => {
+      if (!prev) return prev;
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const removeSubject = (index: number) => {
+    setReviewSubjects(prev => {
+      if (!prev) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const removeTopic = (subIndex: number, topIndex: number) => {
+    setReviewSubjects(prev => {
+      if (!prev) return prev;
+      const next = [...prev];
+      const nextTopics = [...next[subIndex].topics];
+      nextTopics.splice(topIndex, 1);
+      next[subIndex] = { ...next[subIndex], topics: nextTopics };
+      return next;
+    });
+  };
+
+  const addTopic = (subIndex: number) => {
+    setReviewSubjects(prev => {
+      if (!prev) return prev;
+      const next = [...prev];
+      next[subIndex] = { 
+        ...next[subIndex], 
+        topics: [...next[subIndex].topics, { id: crypto.randomUUID(), name: 'Novo Assunto' }] 
+      };
+      return next;
+    });
+  };
+
+  const confirmImport = (mode: 'append' | 'replace') => {
+    if (!reviewSubjects || !userProfile) return;
     
-    // Check if we should append or replace
-    if (cycleQueue.length > 0) {
-      if (!window.confirm("Isso irá SUBSTITUIR sua fila atual pelas novas matérias. Deseja continuar?")) {
+    let nextSubjects = [...userProfile.subjects];
+    
+    if (mode === 'replace') {
+      if (!window.confirm("Isso irá SUBSTITUIR seu plano atual pelas novas matérias. Histórico será mantido para os IDs antigos, mas a fila atual será limpa. Continuar?")) {
         return;
       }
+      nextSubjects = reviewSubjects.map(s => ({ ...s, id: s.id || crypto.randomUUID() })) as SubjectConfig[];
+    } else {
+      nextSubjects = [...nextSubjects, ...reviewSubjects.map(s => ({ ...s, id: s.id || crypto.randomUUID() })) as SubjectConfig[]];
     }
     
-    setCycleQueue(reviewData);
-    setIsSuccess(true);
+    updateUserProfile({ ...userProfile, subjects: nextSubjects });
+    syncCycleWithSubjects();
     
+    setIsSuccess(true);
     setTimeout(() => {
       setIsSuccess(false);
-      setReviewData(null);
+      setReviewSubjects(null);
       setText('');
       setActiveTab('cycle');
     }, 1500);
@@ -88,13 +129,12 @@ export default function Importer() {
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <header className="text-center mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-neutral-900">Importador Inteligente</h1>
-        <p className="text-neutral-500 mt-2">Cole o texto do seu edital ou cronograma. A IA estrutura a fila automaticamente.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-neutral-900">Importador</h1>
+        <p className="text-neutral-500 mt-2">Cole o texto do seu edital ou cronograma. O AprovaFlow estrutura a fila para você.</p>
       </header>
 
-      {!reviewData ? (
+      {!reviewSubjects ? (
         <div className="bg-white p-8 rounded-3xl border border-neutral-200 shadow-sm relative overflow-hidden">
-          {/* Decorator */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-neutral-50 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
           
           <div className="relative z-10">
@@ -144,41 +184,85 @@ export default function Importer() {
         </div>
       ) : (
         <div className="bg-white p-8 rounded-3xl border border-neutral-200 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-neutral-900">Revisar Matérias ({reviewData.length} tópicos)</h2>
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
+            <h2 className="text-xl font-bold text-neutral-900">Revisar Matérias Extraídas</h2>
             <button 
-              onClick={() => setReviewData(null)}
+              onClick={() => setReviewSubjects(null)}
               className="px-4 py-2 text-sm font-bold text-neutral-500 hover:text-neutral-900 bg-neutral-100 rounded-lg"
             >
-              Voltar e Editar Texto
+              Voltar
             </button>
           </div>
 
-          <div className="max-h-96 overflow-y-auto space-y-2 mb-6 pr-2">
-            {reviewData.map((item, idx) => (
-              <div key={idx} className="p-3 bg-neutral-50 border border-neutral-100 rounded-xl flex justify-between items-center">
-                <div>
-                  <span className="font-bold text-neutral-900 block">{item.subject}</span>
-                  <span className="text-sm text-neutral-500">{item.topic}</span>
+          <div className="max-h-[500px] overflow-y-auto space-y-4 mb-6 pr-2">
+            {reviewSubjects.map((subject, subIdx) => (
+              <div key={subject.id} className="p-4 bg-neutral-50 border border-neutral-200 rounded-xl space-y-3">
+                <div className="flex justify-between items-start gap-4">
+                  <div className="flex-1 space-y-2">
+                    <input 
+                      type="text" 
+                      value={subject.name}
+                      onChange={(e) => updateSubjectField(subIdx, 'name', e.target.value)}
+                      className="w-full p-2 font-bold text-lg border border-neutral-200 rounded bg-white"
+                      placeholder="Nome da matéria"
+                    />
+                    <div className="flex gap-4">
+                      <select 
+                        value={subject.importance}
+                        onChange={(e) => updateSubjectField(subIdx, 'importance', parseInt(e.target.value))}
+                        className="p-1 border border-neutral-200 rounded text-sm bg-white"
+                      >
+                        {[1,2,3,4,5].map(v => <option key={v} value={v}>Importância {v}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <button onClick={() => removeSubject(subIdx)} className="p-2 text-red-500 hover:bg-red-50 rounded">
+                    <Trash2 size={18} />
+                  </button>
                 </div>
-                <span className="text-xs font-bold px-2 py-1 bg-neutral-200 text-neutral-600 rounded">
-                  Peso {item.weight}
-                </span>
+                
+                <div className="pl-4 border-l-2 border-neutral-200 space-y-2">
+                  {subject.topics.map((topic, topIdx) => (
+                    <div key={topic.id} className="flex gap-2 items-center">
+                      <input 
+                        type="text"
+                        value={topic.name}
+                        onChange={(e) => {
+                          const newTopics = [...subject.topics];
+                          newTopics[topIdx].name = e.target.value;
+                          updateSubjectField(subIdx, 'topics', newTopics);
+                        }}
+                        className="flex-1 p-1 text-sm border border-neutral-200 rounded bg-white"
+                      />
+                      <button onClick={() => removeTopic(subIdx, topIdx)} className="p-1 text-red-400 hover:bg-red-50 rounded">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                  <button onClick={() => addTopic(subIdx)} className="text-xs font-bold text-blue-600 flex items-center gap-1 mt-2">
+                    <Plus size={14} /> Adicionar Assunto
+                  </button>
+                </div>
               </div>
             ))}
           </div>
 
-          <button 
-            onClick={confirmImport}
-            disabled={isSuccess}
-            className="w-full py-5 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 disabled:bg-blue-300 transition-all flex items-center justify-center gap-3 text-lg"
-          >
-            {isSuccess ? (
-              <><CheckCircle2 size={24} className="text-white" /> Fila Salva!</>
-            ) : (
-              <><Save size={24} /> Confirmar e Gerar Ciclo</>
-            )}
-          </button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button 
+              onClick={() => confirmImport('append')}
+              disabled={isSuccess}
+              className="w-full py-4 bg-neutral-900 text-white font-bold rounded-2xl hover:bg-neutral-800 transition-all flex items-center justify-center gap-2"
+            >
+              <Save size={20} /> Adicionar ao meu plano
+            </button>
+            <button 
+              onClick={() => confirmImport('replace')}
+              disabled={isSuccess}
+              className="w-full py-4 bg-red-50 text-red-700 font-bold rounded-2xl hover:bg-red-100 transition-all flex items-center justify-center gap-2"
+            >
+              <AlertTriangle size={20} /> Substituir plano atual
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { RefreshCcw, BookOpen, Play, CheckCircle2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
-export default function CycleManager({ onStartTask }: { onStartTask: (subject: string, topic: string) => void }) {
+export default function CycleManager({ onStartTask }: { onStartTask: (item: any) => void }) {
   const { cycleQueue, recalculateRoute } = useStore();
 
   const handleRecalculate = () => {
@@ -19,7 +19,7 @@ export default function CycleManager({ onStartTask }: { onStartTask: (subject: s
         </div>
         <button 
           onClick={() => {
-            if (confirm("Recalcular Rota: A IA reorganizará sua fila de matérias com base no seu desempenho (focando mais nas matérias que você erra mais) e no tempo desde o último estudo. Deseja continuar?")) {
+            if (confirm("Recalcular rota reorganizará suas prioridades de acordo com dificuldade, importância, desempenho e histórico recente. Deseja continuar?")) {
               handleRecalculate();
             }
           }}
@@ -52,7 +52,9 @@ export default function CycleManager({ onStartTask }: { onStartTask: (subject: s
                 {item.status === 'next' && (
                   <div className="absolute -top-3 left-6 px-3 py-1 bg-blue-600 text-white text-[10px] uppercase tracking-wider font-bold rounded-full flex gap-2 items-center">
                     <span>Recomendação Atual</span>
-                    <span className="opacity-75 font-normal capitalize hidden sm:inline">- Foco Inteligente (Baseado em relevância, revisão ou dificuldade)</span>
+                    {item.recommendationReasons && item.recommendationReasons.length > 0 && (
+                      <span className="opacity-75 font-normal capitalize hidden sm:inline">- {item.recommendationReasons.slice(0, 2).join(', ')}</span>
+                    )}
                   </div>
                 )}
                 <div className="flex items-center gap-4">
@@ -84,7 +86,7 @@ export default function CycleManager({ onStartTask }: { onStartTask: (subject: s
                 
                 {item.status === 'next' && (
                   <button 
-                    onClick={() => onStartTask(item.subject, item.topic)}
+                    onClick={() => onStartTask(item)}
                     className="w-full md:w-auto px-6 py-3 bg-white text-neutral-900 font-bold rounded-xl hover:bg-neutral-100 transition-colors flex items-center justify-center gap-2"
                   >
                     <Play size={18} /> Estudar Agora

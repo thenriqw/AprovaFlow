@@ -1,21 +1,32 @@
 import React, { useState } from 'react';
 import { useStore, SubjectConfig } from '../store';
-import { BookOpen, Plus, Trash2, Edit2, ChevronDown, ChevronUp } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Edit2, ChevronDown, ChevronUp, Archive, Save, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function Subjects() {
-  const { userProfile, addSubject, updateSubject, deleteSubject, addTopic, deleteTopic } = useStore();
+  const { userProfile, addSubject, updateSubject, deleteSubject, archiveSubject, addTopic, updateTopic, deleteTopic, syncCycleWithSubjects, recalculateRoute } = useStore();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   
   const [newSubject, setNewSubject] = useState({ name: '', difficulty: 'medium' as const, importance: 3 });
   const [newTopic, setNewTopic] = useState({ subjectId: '', name: '' });
+  
+  const [editingSubject, setEditingSubject] = useState<string | null>(null);
+  const [editingTopic, setEditingTopic] = useState<{subId: string, topId: string} | null>(null);
 
   const subjects = userProfile?.subjects || [];
+  const activeSubjects = subjects.filter(s => !s.isArchived);
+  const archivedSubjects = subjects.filter(s => s.isArchived);
+
+  const applyChanges = () => {
+    syncCycleWithSubjects();
+    recalculateRoute();
+  };
 
   const handleAddSubject = () => {
     if (newSubject.name.trim()) {
       addSubject(newSubject);
       setNewSubject({ name: '', difficulty: 'medium', importance: 3 });
+      applyChanges();
     }
   };
 
@@ -23,11 +34,19 @@ export default function Subjects() {
     if (newTopic.subjectId === subjectId && newTopic.name.trim()) {
       addTopic(subjectId, newTopic.name);
       setNewTopic({ subjectId: '', name: '' });
+      applyChanges();
+    }
+  };
+  
+  const handleDeleteSubject = (id: string) => {
+    if (window.confirm('Excluir esta matéria afetará permanentemente seu histórico atrelado a ela. Se quiser preservar o histórico, considere usar a opção Arquivar. Deseja excluir definitivamente?')) {
+      deleteSubject(id);
+      applyChanges();
     }
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       <header>
         <h1 className="text-3xl font-black tracking-tight text-neutral-900">Gerenciador de Matérias</h1>
         <p className="text-neutral-500 mt-1">Organize suas disciplinas e tópicos de estudo.</p>
@@ -77,41 +96,97 @@ export default function Subjects() {
         </div>
       </section>
 
-      {/* Lista de Matérias */}
+      {/* Lista de Matérias Ativas */}
       <section className="space-y-4">
-        {subjects.length === 0 ? (
+        <h2 className="text-xl font-bold text-neutral-900 mb-4">Matérias Ativas</h2>
+        {activeSubjects.length === 0 ? (
           <div className="text-center py-12 text-neutral-400 bg-white rounded-3xl border border-neutral-200 shadow-sm">
-            Você ainda não cadastrou nenhuma matéria.
+            Nenhuma matéria ativa.
           </div>
         ) : (
-          subjects.map(subject => (
+          activeSubjects.map(subject => (
             <div key={subject.id} className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
               <div 
                 className="p-5 flex justify-between items-center cursor-pointer hover:bg-neutral-50 transition-colors"
                 onClick={() => setExpandedId(expandedId === subject.id ? null : subject.id)}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-neutral-100 rounded-xl flex items-center justify-center text-neutral-600">
-                    <BookOpen size={20} />
+                {editingSubject === subject.id ? (
+                  <div className="flex-1 flex gap-3 mr-4" onClick={e => e.stopPropagation()}>
+                    <input 
+                      autoFocus
+                      type="text" 
+                      defaultValue={subject.name}
+                      onBlur={e => { updateSubject(subject.id, { name: e.target.value }); applyChanges(); }}
+                      onKeyDown={e => { if (e.key === 'Enter') { updateSubject(subject.id, { name: e.currentTarget.value }); applyChanges(); setEditingSubject(null); } }}
+                      className="flex-1 p-2 bg-white rounded border border-neutral-300 font-bold"
+                    />
+                    <select 
+                      value={subject.difficulty}
+                      onChange={e => { updateSubject(subject.id, { difficulty: e.target.value as any }); applyChanges(); }}
+                      className="p-2 border border-neutral-300 rounded bg-white text-sm"
+                    >
+                      <option value="low">Dificuldade: Baixa</option>
+                      <option value="medium">Dificuldade: Média</option>
+                      <option value="high">Dificuldade: Alta</option>
+                    </select>
+                    <select 
+                      value={subject.importance}
+                      onChange={e => { updateSubject(subject.id, { importance: parseInt(e.target.value) }); applyChanges(); }}
+                      className="p-2 border border-neutral-300 rounded bg-white text-sm"
+                    >
+                      <option value="1">Peso 1 (Baixo)</option>
+                      <option value="2">Peso 2</option>
+                      <option value="3">Peso 3 (Médio)</option>
+                      <option value="4">Peso 4</option>
+                      <option value="5">Peso 5 (Alto)</option>
+                    </select>
+                    <button onClick={() => setEditingSubject(null)} className="p-2 text-green-600 bg-green-50 rounded">
+                      <Save size={18} />
+                    </button>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-neutral-900">{subject.name}</h3>
-                    <p className="text-xs text-neutral-500">
-                      Dif: {subject.difficulty === 'high' ? 'Alta' : subject.difficulty === 'low' ? 'Baixa' : 'Média'} • 
-                      Peso: {subject.importance} • 
-                      {subject.topics.length} assuntos
-                    </p>
+                ) : (
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-neutral-100 rounded-xl flex items-center justify-center text-neutral-600">
+                      <BookOpen size={20} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-neutral-900">{subject.name}</h3>
+                      <p className="text-xs text-neutral-500">
+                        Dif: {subject.difficulty === 'high' ? 'Alta' : subject.difficulty === 'low' ? 'Baixa' : 'Média'} • 
+                        Peso: {subject.importance} • 
+                        {subject.topics.length} assuntos
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-4">
+                )}
+                
+                <div className="flex items-center gap-2">
+                  {!editingSubject && (
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setEditingSubject(subject.id); }}
+                      className="p-2 text-neutral-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
+                      title="Editar Matéria"
+                    >
+                      <Edit2 size={18} />
+                    </button>
+                  )}
                   <button 
-                    onClick={(e) => { e.stopPropagation(); deleteSubject(subject.id); }}
+                    onClick={(e) => { e.stopPropagation(); archiveSubject(subject.id); applyChanges(); }}
+                    className="p-2 text-neutral-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                    title="Arquivar Matéria (Ocultar da Fila)"
+                  >
+                    <Archive size={18} />
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleDeleteSubject(subject.id); }}
                     className="p-2 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                    title="Excluir Matéria"
+                    title="Excluir Definitivamente"
                   >
                     <Trash2 size={18} />
                   </button>
-                  {expandedId === subject.id ? <ChevronUp size={20} className="text-neutral-400" /> : <ChevronDown size={20} className="text-neutral-400" />}
+                  <div className="pl-2 border-l border-neutral-200">
+                    {expandedId === subject.id ? <ChevronUp size={20} className="text-neutral-400" /> : <ChevronDown size={20} className="text-neutral-400" />}
+                  </div>
                 </div>
               </div>
               
@@ -137,13 +212,35 @@ export default function Subjects() {
                   <div className="space-y-2">
                     {subject.topics.map(topic => (
                       <div key={topic.id} className="flex justify-between items-center p-3 bg-white rounded-lg border border-neutral-100 shadow-sm">
-                        <span className="text-sm font-medium text-neutral-700">{topic.name}</span>
-                        <button 
-                          onClick={() => deleteTopic(subject.id, topic.id)}
-                          className="text-neutral-400 hover:text-red-500 transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        {editingTopic?.subId === subject.id && editingTopic.topId === topic.id ? (
+                          <input 
+                            autoFocus
+                            type="text"
+                            defaultValue={topic.name}
+                            onBlur={e => { updateTopic(subject.id, topic.id, e.target.value); applyChanges(); }}
+                            onKeyDown={e => { if (e.key === 'Enter') { updateTopic(subject.id, topic.id, e.currentTarget.value); applyChanges(); setEditingTopic(null); } }}
+                            className="flex-1 text-sm font-medium text-neutral-900 bg-white border border-neutral-300 rounded px-2 py-1 mr-2"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-neutral-700 flex-1">{topic.name}</span>
+                        )}
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => {
+                              if (editingTopic?.topId === topic.id) setEditingTopic(null);
+                              else setEditingTopic({ subId: subject.id, topId: topic.id });
+                            }}
+                            className="text-neutral-400 hover:text-blue-500 transition-colors"
+                          >
+                            {editingTopic?.topId === topic.id ? <Save size={16} className="text-green-500" /> : <Edit2 size={16} />}
+                          </button>
+                          <button 
+                            onClick={() => { deleteTopic(subject.id, topic.id); applyChanges(); }}
+                            className="text-neutral-400 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                     {subject.topics.length === 0 && (
@@ -156,6 +253,38 @@ export default function Subjects() {
           ))
         )}
       </section>
+
+      {/* Lista de Matérias Arquivadas */}
+      {archivedSubjects.length > 0 && (
+        <section className="space-y-4 pt-8 border-t border-neutral-200">
+          <h2 className="text-xl font-bold text-neutral-500 mb-4">Matérias Arquivadas</h2>
+          {archivedSubjects.map(subject => (
+            <div key={subject.id} className="bg-neutral-50 rounded-2xl border border-neutral-200 opacity-70">
+              <div className="p-5 flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-neutral-200 rounded-xl flex items-center justify-center text-neutral-400">
+                    <Archive size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-neutral-600 line-through">{subject.name}</h3>
+                    <p className="text-xs text-neutral-400">
+                      {subject.topics.length} assuntos
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => { updateSubject(subject.id, { isArchived: false }); applyChanges(); }}
+                    className="p-2 text-neutral-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all text-sm font-bold"
+                  >
+                    Desarquivar
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
     </div>
   );
 }
