@@ -10,6 +10,7 @@ export interface Plan {
   objective?: string;
   examDate?: string;
   availableTimePerDay: Record<number, number>; // 0=Sunday, 6=Saturday
+  syllabusId?: string; // Optional link to a template syllabus
   createdAt: string;
   updatedAt: string;
   // Configuration options for the plan
@@ -18,7 +19,17 @@ export interface Plan {
 export interface Syllabus {
   id: string;
   name: string;
-  // Represents a curriculum, could be a template or personal
+  description?: string;
+  type: 'personal' | 'template'; // Represents a curriculum, could be a template or personal
+  category?: 'ENEM' | 'Vestibular' | 'Concurso' | 'OAB' | 'Outro';
+  institution?: string; // e.g., 'FUVEST', 'CESPE', 'INEP'
+  year?: number;
+  version: number;
+  tags?: string[];
+  isPublic: boolean;
+  authorId?: string; // If created by a user
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Subject {
@@ -28,6 +39,7 @@ export interface Subject {
   importance: number; // e.g., 1-5
   difficulty: number; // e.g., 1-5
   isArchived?: boolean;
+  syllabusSubjectId?: string; // Link to the original syllabus subject if applicable
   createdAt: string;
   updatedAt: string;
 }

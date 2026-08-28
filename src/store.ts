@@ -450,6 +450,7 @@ export const useStore = create<AppState>()(
         });
         
         let newPlanId: string | null = null;
+        let newPlanObj: Plan | null = null;
         let v2Subjects: Subject[] = [];
         let v2Topics: Topic[] = [];
 
@@ -468,6 +469,7 @@ export const useStore = create<AppState>()(
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
+          newPlanObj = newPlan;
 
           profile.subjects.forEach(sub => {
             const newSub: Subject = {
@@ -500,7 +502,14 @@ export const useStore = create<AppState>()(
               batch.set(doc(db, 'users', uid, 'plans', newPlanId!), newPlan);
               v2Subjects.forEach(s => batch.set(doc(db, 'users', uid, 'plans', newPlanId!, 'subjects', s.id), s));
               v2Topics.forEach(t => batch.set(doc(db, 'users', uid, 'plans', newPlanId!, 'topics', t.id), t));
-              batch.set(doc(db, 'users', uid), { activePlanId: newPlanId }, { merge: true });
+              
+              const weeklyGoal = Object.values(profile.availableTimePerDay).reduce((a, b) => a + b, 0);
+              batch.set(doc(db, 'users', uid), { 
+                hasCompletedOnboarding: true,
+                activePlanId: newPlanId,
+                weeklyGoalHours: weeklyGoal
+              }, { merge: true });
+              
               await batch.commit();
             });
           }).catch(console.error);
@@ -511,7 +520,7 @@ export const useStore = create<AppState>()(
           userProfile: profile, 
           cycleQueue: initialQueue,
           weeklyGoalHours: Object.values(profile.availableTimePerDay).reduce((a, b) => a + b, 0),
-          ...(newPlanId ? { activePlanId: newPlanId, plans: [{ id: newPlanId } as Plan], v2Subjects, v2Topics } : {})
+          ...(newPlanObj ? { activePlanId: newPlanId, plans: [newPlanObj], v2Subjects, v2Topics } : {})
         });
       },
       skipOnboarding: () => set({ hasCompletedOnboarding: true }),

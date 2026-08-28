@@ -42,6 +42,21 @@ function App() {
               // No remote data. Check if we have local data worth migrating.
               if (state.hasCompletedOnboarding || state.sessions.length > 0) {
                 setShowMigration(true);
+              } else {
+                // New user! Load empty state so dbLoaded becomes true.
+                loadFromDb({
+                  hasCompletedOnboarding: false,
+                  weeklyGoalHours: 25,
+                  userProfile: null,
+                  cycleQueue: [],
+                  activeTask: null,
+                  sessions: [],
+                  plans: [],
+                  activePlanId: null,
+                  v2Subjects: [],
+                  v2Topics: [],
+                  v2Activities: []
+                });
               }
             } else {
               setSyncingFromDb(true);
@@ -130,7 +145,33 @@ function App() {
         const config = await getUserConfig(firebaseUser.uid);
         if (config && config.activePlanId) {
           const planFullData = await loadPlanData(firebaseUser.uid, config.activePlanId);
-          loadFromDb({ ...config, activePlanId: config.activePlanId, v2Subjects: planFullData.subjects, v2Topics: planFullData.topics, v2Activities: planFullData.activities, sessions: planFullData.sessions });
+          const plans = await getPlans(firebaseUser.uid);
+          
+          const activePlan = plans.find(p => p.id === config.activePlanId);
+          const bridgedProfile = activePlan ? {
+            objective: activePlan.objective,
+            examDate: activePlan.examDate,
+            availableTimePerDay: activePlan.availableTimePerDay,
+            subjects: planFullData.subjects.map(s => ({
+              id: s.id,
+              name: s.name,
+              difficulty: s.difficulty >= 4 ? 'high' : (s.difficulty >= 3 ? 'medium' : 'low'),
+              importance: s.importance,
+              isArchived: s.isArchived,
+              topics: planFullData.topics.filter(t => t.subjectId === s.id).map(t => ({ id: t.id, name: t.name }))
+            }))
+          } : null;
+          
+          loadFromDb({ 
+            ...config, 
+            activePlanId: config.activePlanId, 
+            plans,
+            v2Subjects: planFullData.subjects, 
+            v2Topics: planFullData.topics, 
+            v2Activities: planFullData.activities, 
+            sessions: planFullData.sessions,
+            userProfile: bridgedProfile
+          });
         }
       } else {
         // Clear local data if they chose to start fresh
