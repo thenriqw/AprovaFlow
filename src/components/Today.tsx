@@ -24,7 +24,7 @@ export default function Today() {
   // Get next task
   const state = useStore.getState();
   const queueWithScores = cycleQueue
-    .filter(item => item.status === 'pending')
+    .filter(item => item.status === 'pending' || item.status === 'next')
     .map(item => {
       const scoreData = calculatePriorityScore(item, state);
       return { ...item, score: scoreData.score, reasons: scoreData.reasons };
@@ -32,6 +32,12 @@ export default function Today() {
     .sort((a, b) => b.score - a.score);
 
   const nextTask = queueWithScores[0];
+  
+  // Find recommended activity if we have v2Activities
+  const { v2Activities } = state;
+  const recommendedActivity = nextTask && v2Activities?.find(a => 
+    a.topicId === nextTask.topicId && a.status !== 'completed'
+  );
 
   const handleStart = () => {
     if (nextTask) {
@@ -41,6 +47,19 @@ export default function Today() {
     }
     setActiveTab('timer');
   };
+
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const weeklySessions = sessions.filter(s => new Date(s.date) >= startOfWeek);
+  const weeklySeconds = weeklySessions.reduce((acc, s) => acc + (s.durationSeconds || 0), 0);
+  const weeklyHours = Math.round((weeklySeconds / 3600) * 10) / 10;
+  
+  const weeklyProgress = state.weeklyGoalHours > 0 
+    ? Math.min(100, Math.round((weeklyHours / state.weeklyGoalHours) * 100))
+    : 0;
 
   const formatHours = (h: number) => {
     const hrs = Math.floor(h);
@@ -128,6 +147,18 @@ export default function Today() {
                     </p>
                   </div>
                 )}
+                {recommendedActivity && (
+                  <div className="mt-2 flex items-center gap-3 text-sm font-medium text-neutral-600 bg-neutral-100/50 p-2 rounded-lg inline-flex">
+                    <span className="bg-white px-2 py-1 rounded shadow-sm border border-neutral-100 text-neutral-900">{recommendedActivity.type}</span>
+                    {recommendedActivity.source && <span>{recommendedActivity.source}</span>}
+                    {recommendedActivity.expectedDurationSeconds > 0 && (
+                      <>
+                        <span className="w-1 h-1 bg-neutral-300 rounded-full"></span>
+                        <span>{Math.round(recommendedActivity.expectedDurationSeconds / 60)} min</span>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
               
               <button 
@@ -172,11 +203,11 @@ export default function Today() {
           </div>
           <div className="mt-auto">
             <div className="flex justify-between items-end mb-2">
-              <span className="text-3xl font-serif font-bold text-neutral-900">0<span className="text-lg text-neutral-400">h</span></span>
+              <span className="text-3xl font-serif font-bold text-neutral-900">{weeklyHours}<span className="text-lg text-neutral-400">h</span></span>
               <span className="text-sm font-medium text-neutral-500">Meta: {state.weeklyGoalHours}h</span>
             </div>
             <div className="h-3 w-full bg-neutral-100 rounded-full overflow-hidden">
-              <div className="h-full bg-neutral-900 rounded-full" style={{ width: '0%' }}></div>
+              <div className="h-full bg-neutral-900 rounded-full transition-all duration-1000" style={{ width: `${weeklyProgress}%` }}></div>
             </div>
           </div>
         </div>

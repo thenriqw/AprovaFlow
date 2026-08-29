@@ -8,6 +8,7 @@ import Progress from './components/Progress';
 import Settings from './components/Settings';
 import Onboarding from './components/Onboarding';
 import Content from './components/Content';
+import CreatePlan from './components/CreatePlan';
 import { useStore } from './store';
 import { APP_NAME } from './config/constants';
 import { initAuth, googleSignIn } from './lib/firebase';
@@ -116,6 +117,8 @@ function App() {
               }
               
               loadFromDb({ ...config, ...plansData });
+              useStore.getState().syncCycleWithSubjects();
+              useStore.getState().recalculateRoute();
               setTimeout(() => setSyncingFromDb(false), 100);
             }
           } catch (e: any) {
@@ -199,6 +202,8 @@ function App() {
             })),
             userProfile: bridgedProfile
           });
+          useStore.getState().syncCycleWithSubjects();
+          useStore.getState().recalculateRoute();
         }
       } else {
         // Clear local data if they chose to start fresh
@@ -313,6 +318,7 @@ function App() {
       {currentTab === 'progress' && <Progress />}
       {currentTab === 'timer' && <Timer />}
       {currentTab === 'settings' && <Settings />}
+      {currentTab === 'create-plan' && <CreatePlan />}
     </Layout>
   );
 }

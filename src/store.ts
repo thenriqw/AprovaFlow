@@ -110,6 +110,12 @@ interface AppState {
   setCycleQueue: (queue: CycleItem[]) => void;
   recalculateRoute: () => void;
   syncCycleWithSubjects: () => void;
+  addV2Subject: (subject: Subject) => void;
+  updateV2Subject: (subject: Subject) => void;
+  deleteV2Subject: (id: string) => void;
+  addV2Topic: (topic: Topic) => void;
+  updateV2Topic: (topic: Topic) => void;
+  deleteV2Topic: (id: string) => void;
   setActiveTask: (task: ActiveTaskInfo | null) => void;
   completeCycleItem: (id: string) => void;
   setWeeklyGoalHours: (hours: number) => void;
@@ -135,8 +141,8 @@ interface AppState {
 if (typeof window !== 'undefined') {
   try {
     const oldStorageStr = localStorage.getItem('estudei-storage');
-    if (oldStorageStr && !localStorage.getItem('aprovaflow-storage')) {
-       localStorage.setItem('aprovaflow-storage', oldStorageStr);
+    if (oldStorageStr && !localStorage.getItem('efederal-storage')) {
+       localStorage.setItem('efederal-storage', oldStorageStr);
     }
   } catch(e) {}
 }
@@ -283,7 +289,7 @@ export const useStore = create<AppState>()(
           hasCompletedOnboarding: data.hasCompletedOnboarding ?? false,
           weeklyGoalHours: data.weeklyGoalHours ?? 25,
           userProfile: data.userProfile ?? null,
-          cycleQueue: data.cycleQueue ?? [],
+          cycleQueue: [], // Force regenerate queue to be plan-specific
           activeTask: data.activeTask ?? null,
           sessions: data.sessions ?? [],
           plans: data.plans ?? [],
@@ -357,8 +363,12 @@ export const useStore = create<AppState>()(
               errorReason: s.errorReason || '',
               date: s.date
             })),
-            ...(bridgedProfile ? { userProfile: bridgedProfile } : {})
+            ...(bridgedProfile ? { userProfile: bridgedProfile } : {}),
+            cycleQueue: [] // Clear so syncCycle can rebuild it
           });
+          
+          state.syncCycleWithSubjects();
+          state.recalculateRoute();
         } catch (error) {
           console.error("Failed to switch plan:", error);
           // Fallback just state change
@@ -468,6 +478,62 @@ export const useStore = create<AppState>()(
         
         return { cycleQueue: newQueue };
       }),
+
+      addV2Subject: (subject) => set(state => {
+        const v2Subjects = [...state.v2Subjects, subject];
+        if (state.firebaseUser && state.activePlanId) {
+          import('./lib/db').then(({ savePlanDocument }) => 
+            savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'subjects', subject)
+          ).catch(console.error);
+        }
+        return { v2Subjects };
+      }),
+      updateV2Subject: (subject) => set(state => {
+        const v2Subjects = state.v2Subjects.map(s => s.id === subject.id ? subject : s);
+        if (state.firebaseUser && state.activePlanId) {
+          import('./lib/db').then(({ savePlanDocument }) => 
+            savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'subjects', subject)
+          ).catch(console.error);
+        }
+        return { v2Subjects };
+      }),
+      deleteV2Subject: (id) => set(state => {
+        const v2Subjects = state.v2Subjects.filter(s => s.id !== id);
+        if (state.firebaseUser && state.activePlanId) {
+          import('./lib/db').then(({ deletePlanDocument }) => 
+            deletePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'subjects', id)
+          ).catch(console.error);
+        }
+        return { v2Subjects };
+      }),
+      addV2Topic: (topic) => set(state => {
+        const v2Topics = [...state.v2Topics, topic];
+        if (state.firebaseUser && state.activePlanId) {
+          import('./lib/db').then(({ savePlanDocument }) => 
+            savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'topics', topic)
+          ).catch(console.error);
+        }
+        return { v2Topics };
+      }),
+      updateV2Topic: (topic) => set(state => {
+        const v2Topics = state.v2Topics.map(t => t.id === topic.id ? topic : t);
+        if (state.firebaseUser && state.activePlanId) {
+          import('./lib/db').then(({ savePlanDocument }) => 
+            savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'topics', topic)
+          ).catch(console.error);
+        }
+        return { v2Topics };
+      }),
+      deleteV2Topic: (id) => set(state => {
+        const v2Topics = state.v2Topics.filter(t => t.id !== id);
+        if (state.firebaseUser && state.activePlanId) {
+          import('./lib/db').then(({ deletePlanDocument }) => 
+            deletePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'topics', id)
+          ).catch(console.error);
+        }
+        return { v2Topics };
+      }),
+
       setActiveTask: (task) => set({ activeTask: task }),
       completeCycleItem: (id) => set((state) => {
         const newQueue: CycleItem[] = state.cycleQueue.map(item => 
@@ -678,7 +744,7 @@ export const useStore = create<AppState>()(
       }),
     }),
     {
-      name: 'aprovaflow-storage', // Migrated storage key
+      name: 'efederal-storage', // Migrated storage key
       version: 2,
       migrate: (persistedState: any, version: number) => {
         if (version === 1) {

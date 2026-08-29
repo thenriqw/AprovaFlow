@@ -130,7 +130,7 @@ export default function Importer() {
     <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <header className="text-center mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-neutral-900">Importador</h1>
-        <p className="text-neutral-500 mt-2">Cole o texto do seu edital ou cronograma. O AprovaFlow estrutura a fila para você.</p>
+        <p className="text-neutral-500 mt-2">Cole o texto do seu edital ou cronograma. O éFederal estrutura a fila para você.</p>
       </header>
 
       {!reviewSubjects ? (

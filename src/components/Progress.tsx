@@ -8,7 +8,17 @@ export default function Progress() {
   const [tab, setTab] = useState<'overview' | 'history'>('overview');
 
   const totalSeconds = sessions.reduce((acc, s) => acc + (s.durationSeconds || 0), 0);
-  const totalHours = Math.round(totalSeconds / 3600);
+  
+  const formatPreciseHours = (seconds: number) => {
+    if (seconds === 0) return '0h';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    if (hrs > 0 && mins > 0) return `${hrs}h${mins.toString().padStart(2, '0')}`;
+    if (hrs > 0) return `${hrs}h`;
+    return `${mins}min`;
+  };
+
+  const totalFormatted = formatPreciseHours(totalSeconds);
 
   let questionsTotal = 0;
   let questionsCorrect = 0;
@@ -17,7 +27,7 @@ export default function Progress() {
     if (s.questionsCorrect) questionsCorrect += s.questionsCorrect;
   });
   
-  const accuracy = questionsTotal > 0 ? Math.round((questionsCorrect / questionsTotal) * 100) : 0;
+  const accuracy = questionsTotal > 0 ? `${Math.round((questionsCorrect / questionsTotal) * 100)}%` : '--';
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -53,7 +63,7 @@ export default function Progress() {
             <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-sm">
               <Clock size={20} className="text-blue-500 mb-3" />
               <span className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1 block">Tempo Total</span>
-              <span className="text-2xl font-bold text-neutral-900">{totalHours}h</span>
+              <span className="text-2xl font-bold text-neutral-900">{totalFormatted}</span>
             </div>
             <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-sm">
               <CalendarDays size={20} className="text-purple-500 mb-3" />
@@ -63,7 +73,7 @@ export default function Progress() {
             <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-sm">
               <CheckCircle size={20} className="text-emerald-500 mb-3" />
               <span className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1 block">Precisão Geral</span>
-              <span className="text-2xl font-bold text-neutral-900">{accuracy}%</span>
+              <span className="text-2xl font-bold text-neutral-900">{accuracy}</span>
             </div>
             <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-sm">
               <BrainCircuit size={20} className="text-orange-500 mb-3" />

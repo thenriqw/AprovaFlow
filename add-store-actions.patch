@@ -1,0 +1,52 @@
+--- src/store.ts
++++ src/store.ts
+@@ -632,6 +632,49 @@
+           };
+         });
+       },
++      
++      addV2Subject: (subject) => set(state => {
++        const v2Subjects = [...state.v2Subjects, subject];
++        if (state.firebaseUser && state.activePlanId) {
++          savePlanDocument(state.firebaseUser.uid, state.activePlanId, 'subjects', subject).catch(console.error);
++        }
++        return { v2Subjects };
++      }),
++      updateV2Subject: (subject) => set(state => {
++        const v2Subjects = state.v2Subjects.map(s => s.id === subject.id ? subject : s);
++        if (state.firebaseUser && state.activePlanId) {
++          savePlanDocument(state.firebaseUser.uid, state.activePlanId, 'subjects', subject).catch(console.error);
++        }
++        return { v2Subjects };
++      }),
++      deleteV2Subject: (id) => set(state => {
++        const v2Subjects = state.v2Subjects.filter(s => s.id !== id);
++        if (state.firebaseUser && state.activePlanId) {
++          deletePlanDocument(state.firebaseUser.uid, state.activePlanId, 'subjects', id).catch(console.error);
++        }
++        return { v2Subjects };
++      }),
++      addV2Topic: (topic) => set(state => {
++        const v2Topics = [...state.v2Topics, topic];
++        if (state.firebaseUser && state.activePlanId) {
++          savePlanDocument(state.firebaseUser.uid, state.activePlanId, 'topics', topic).catch(console.error);
++        }
++        return { v2Topics };
++      }),
++      updateV2Topic: (topic) => set(state => {
++        const v2Topics = state.v2Topics.map(t => t.id === topic.id ? topic : t);
++        if (state.firebaseUser && state.activePlanId) {
++          savePlanDocument(state.firebaseUser.uid, state.activePlanId, 'topics', topic).catch(console.error);
++        }
++        return { v2Topics };
++      }),
++      deleteV2Topic: (id) => set(state => {
++        const v2Topics = state.v2Topics.filter(t => t.id !== id);
++        if (state.firebaseUser && state.activePlanId) {
++          deletePlanDocument(state.firebaseUser.uid, state.activePlanId, 'topics', id).catch(console.error);
++        }
++        return { v2Topics };
++      }),
+       
+       setActiveTask: (task) => set({ activeTask: task }),
+       addSession: (session) => set((state) => {

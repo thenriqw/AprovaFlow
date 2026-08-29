@@ -10,17 +10,29 @@ export default function Onboarding() {
   const handleSelectPath = async (path: string) => {
     setStep('loading');
     
-    // For now, we will create a generic blank plan for all, except "free" which just finishes onboarding.
-    // In next steps, this will route to specific setups.
+    // For free mode, 0h available per day so it doesn't inflate capacity
     const defaultProfile = {
-      objective: path === 'free' ? 'Modo Livre' : 'Meu Novo Plano',
+      objective: path === 'free' ? 'Modo Livre' : 'Novo Plano',
       examName: '', examDate: '',
-      availableTimePerDay: { 0: 3, 1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3 },
+      availableTimePerDay: path === 'free' ? { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 } : { 0: 0, 1: 2, 2: 2, 3: 2, 4: 2, 5: 2, 6: 0 },
       subjects: []
     };
 
     try {
-      await completeOnboarding(defaultProfile);
+      if (path === 'objective') {
+        // We will just complete with default and let them edit it in CreatePlan or PlanOverview
+        await completeOnboarding(defaultProfile);
+        useStore.getState().setActiveTab('plan');
+      } else if (path === 'import') {
+        await completeOnboarding(defaultProfile);
+        useStore.getState().setActiveTab('inbox');
+      } else if (path === 'manual') {
+        await completeOnboarding(defaultProfile);
+        useStore.getState().setActiveTab('content');
+      } else {
+        await completeOnboarding(defaultProfile);
+        useStore.getState().setActiveTab('today');
+      }
     } catch (e) {
       console.error(e);
       setStep('options');
@@ -71,7 +83,7 @@ export default function Onboarding() {
             </div>
             <div>
               <h3 className="text-lg font-semibold text-neutral-900">Tenho um edital ou cronograma</h3>
-              <p className="text-sm text-neutral-500 mt-1 leading-relaxed">Importe PDFs ou planilhas para gerar seu plano automaticamente.</p>
+              <p className="text-sm text-neutral-500 mt-1 leading-relaxed">Cole o texto do material para gerar seu plano automaticamente.</p>
             </div>
           </button>
 

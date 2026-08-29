@@ -22,10 +22,12 @@ export default function PlanOverview() {
   
   // Calculate Demand
   let totalDemandMinutes = 0;
+  let pendingDemandMinutes = 0;
   if (v2Activities && v2Activities.length > 0) {
     totalDemandMinutes = v2Activities.reduce((acc, act) => acc + (Math.round(act.expectedDurationSeconds / 60) || 0), 0);
-  } else {
-    // Fallback if no activities: use topics estimated time if we had them, but we don't right now, so demand is 0
+    pendingDemandMinutes = v2Activities
+      .filter(act => act.status !== 'completed')
+      .reduce((acc, act) => acc + (Math.round(act.expectedDurationSeconds / 60) || 0), 0);
   }
 
   const daysToExam = activePlan.examDate 
@@ -34,6 +36,8 @@ export default function PlanOverview() {
 
   const totalWeeks = daysToExam ? Math.ceil(daysToExam / 7) : null;
   const totalCapacityRemaining = totalWeeks ? totalWeeks * weeklyCapacityMinutes : null;
+
+  const planStatus = daysToExam !== null && daysToExam === 0 ? 'Concluído' : 'Ativo';
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -50,7 +54,7 @@ export default function PlanOverview() {
         <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-sm flex flex-col">
           <Target size={20} className="text-neutral-400 mb-3" />
           <span className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Status</span>
-          <span className="text-lg font-semibold text-neutral-900">Em andamento</span>
+          <span className="text-lg font-semibold text-neutral-900">{planStatus}</span>
         </div>
         <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-sm flex flex-col">
           <Calendar size={20} className="text-neutral-400 mb-3" />
@@ -87,19 +91,20 @@ export default function PlanOverview() {
             <div className="space-y-6">
               <div className="flex justify-between items-end">
                 <div>
-                  <p className="text-sm font-bold text-neutral-500 uppercase tracking-wider mb-1">Demanda Planejada</p>
-                  <p className="text-3xl font-bold text-neutral-900">{Math.round(totalDemandMinutes / 60)}h</p>
+                  <p className="text-sm font-bold text-neutral-500 uppercase tracking-wider mb-1">Carga Pendente</p>
+                  <p className="text-3xl font-bold text-neutral-900">{Math.round(pendingDemandMinutes / 60)}h</p>
+                  <p className="text-sm text-neutral-500 mt-1">de {Math.round(totalDemandMinutes / 60)}h totais</p>
                 </div>
                 {totalCapacityRemaining !== null && (
                   <div className="text-right">
-                    <p className="text-sm font-bold text-neutral-500 uppercase tracking-wider mb-1">Capacidade Total</p>
+                    <p className="text-sm font-bold text-neutral-500 uppercase tracking-wider mb-1">Capacidade Restante</p>
                     <p className="text-3xl font-bold text-neutral-900">{Math.round(totalCapacityRemaining / 60)}h</p>
                   </div>
                 )}
               </div>
-              {totalCapacityRemaining !== null && totalDemandMinutes > totalCapacityRemaining && (
+              {totalCapacityRemaining !== null && pendingDemandMinutes > totalCapacityRemaining && (
                 <div className="bg-red-50 text-red-700 p-4 rounded-xl text-sm font-medium">
-                  Atenção: Sua demanda de conteúdo ultrapassa sua capacidade de tempo disponível até a data da prova. 
+                  Atenção: Sua demanda pendente ultrapassa sua capacidade de tempo disponível até a data da prova. 
                   Recomendamos ajustar as horas diárias ou focar nos tópicos de maior peso.
                 </div>
               )}
