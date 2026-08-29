@@ -183,9 +183,9 @@ export default function Today() {
       <div className="grid md:grid-cols-2 gap-6 mt-8">
         <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm">
           <h3 className="text-lg font-bold text-neutral-900 mb-4">Depois</h3>
-          {queueWithScores.slice(1, 4).length > 0 ? (
+          {queueWithScores.slice(0, 3).length > 0 ? (
             <div className="space-y-3">
-              {queueWithScores.slice(1, 4).map(item => (
+              {queueWithScores.slice(0, 3).map(item => (
                 <div key={item.id} className="flex justify-between items-center p-3 hover:bg-neutral-50 rounded-xl transition-colors cursor-default">
                   <div>
                     <p className="text-sm font-bold text-neutral-900">{item.subject}</p>

@@ -297,7 +297,7 @@ function App() {
     setActiveTab('timer');
   };
 
-  if (!hasCompletedOnboarding) {
+  if (!hasCompletedOnboarding && activeTab !== 'create-plan') {
     return <Onboarding />;
   }
 

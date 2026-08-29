@@ -145,9 +145,16 @@ interface AppState {
 // (Block removed from here, moving down)
 if (typeof window !== 'undefined') {
   try {
-    const oldStorageStr = localStorage.getItem('estudei-storage');
-    if (oldStorageStr && !localStorage.getItem('efederal-storage')) {
-       localStorage.setItem('efederal-storage', oldStorageStr);
+    if (!localStorage.getItem('efederal-storage')) {
+      const aprovaflowStr = localStorage.getItem('aprovaflow-storage');
+      if (aprovaflowStr) {
+        localStorage.setItem('efederal-storage', aprovaflowStr);
+      } else {
+        const estudeiStr = localStorage.getItem('estudei-storage');
+        if (estudeiStr) {
+          localStorage.setItem('efederal-storage', estudeiStr);
+        }
+      }
     }
   } catch(e) {}
 }
@@ -322,7 +329,56 @@ export const useStore = create<AppState>()(
       activeTab: 'today',
       setActiveTab: (tab) => set({ activeTab: tab }),
       setActivePlan: (planId) => set({ activePlanId: planId }),
-      createPlan: async () => {},
+createPlan: async (planData) => {
+        const state = get();
+        if (!state.firebaseUser) {
+          throw new Error("Você precisa estar autenticado para criar um plano.");
+        }
+        const { doc, writeBatch } = await import('firebase/firestore');
+        const { db } = await import('./lib/firebase');
+
+        const newPlanId = 'plan_' + crypto.randomUUID().split('-')[0];
+        
+        const newPlan = {
+          id: newPlanId,
+          userId: state.firebaseUser.uid,
+          name: planData.name,
+          objective: planData.objective,
+          examDate: planData.examDate,
+          availableTimePerDay: planData.availableTimePerDay,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        const batch = writeBatch(db);
+        batch.set(doc(db, 'users', state.firebaseUser.uid, 'plans', newPlanId), newPlan);
+        batch.update(doc(db, 'users', state.firebaseUser.uid), { activePlanId: newPlanId });
+        
+        await batch.commit();
+
+        const bridgedProfile = {
+          objective: newPlan.objective,
+          examName: newPlan.name,
+          examDate: newPlan.examDate,
+          availableTimePerDay: newPlan.availableTimePerDay,
+          subjects: []
+        };
+
+        const weeklyGoalHours = Object.values(newPlan.availableTimePerDay).reduce((a, b) => a + b, 0);
+
+        set({
+          plans: [...(state.plans || []), newPlan],
+          activePlanId: newPlanId,
+          v2Subjects: [],
+          v2Topics: [],
+          v2Activities: [],
+          sessions: [],
+          cycleQueue: [],
+          userProfile: bridgedProfile,
+          weeklyGoalHours: weeklyGoalHours,
+          hasCompletedOnboarding: true
+        });
+      },
       switchPlan: async (planId) => {
         const state = get();
         if (!state.firebaseUser) {
@@ -384,8 +440,8 @@ export const useStore = create<AppState>()(
           state.recalculateRoute();
         } catch (error) {
           console.error("Failed to switch plan:", error);
-          // Fallback just state change
-          set({ activePlanId: planId });
+          alert("Não foi possível carregar o plano. Verifique sua conexão e tente novamente.");
+          throw error;
         }
       },
       addSession: (session) => set((state) => ({

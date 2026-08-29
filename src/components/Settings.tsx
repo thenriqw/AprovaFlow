@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
-import { Settings as SettingsIcon, Trash2, Target, AlertTriangle, User, LogOut, CheckCircle, Cloud, RefreshCcw } from 'lucide-react';
+import { Settings as SettingsIcon, Trash2, Target, AlertTriangle, User, LogOut, CheckCircle, Cloud, RefreshCcw, Database } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { googleSignIn, logout } from '../lib/firebase';
 
@@ -48,27 +48,23 @@ export default function Settings() {
 
       <div className="space-y-6">
         {/* Workspace Integrações */}
+        
         <section className="bg-white p-6 md:p-8 rounded-3xl border border-neutral-200 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-start justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-                <Cloud size={20} />
+              <div className="p-2 bg-neutral-100 text-neutral-600 rounded-lg">
+                <Database size={20} />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-neutral-900">Google Workspace</h3>
-                <p className="text-sm text-neutral-500">Conecte sua conta para integrar com Drive, Calendar e Tasks.</p>
+                <h3 className="text-lg font-bold text-neutral-900">Conta Google</h3>
+                <p className="text-sm text-neutral-500">Autenticação e sincronização.</p>
               </div>
             </div>
-            {firebaseUser && (
-              <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1 rounded-full text-sm font-medium">
-                <CheckCircle size={16} /> Conectado
-              </div>
-            )}
           </div>
           
           {!firebaseUser ? (
             <div className="flex flex-col items-center p-6 bg-neutral-50 rounded-2xl border border-neutral-100">
-              <p className="text-sm text-neutral-500 mb-4 text-center">Para sincronizar com os serviços do Google, você precisa se autenticar.</p>
+              <p className="text-sm text-neutral-500 mb-4 text-center">Para usar a sincronização em nuvem, conecte sua conta Google.</p>
               <button 
                 onClick={handleLogin}
                 disabled={isLoggingIn}
@@ -100,23 +96,44 @@ export default function Settings() {
               </button>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="flex items-center gap-4 p-4 bg-neutral-50 rounded-2xl border border-neutral-100">
-                <img src={firebaseUser.photoURL || ''} alt="User" className="w-12 h-12 rounded-full border border-neutral-200" />
-                <div className="flex-1">
-                  <h4 className="font-bold text-neutral-900">{firebaseUser.displayName}</h4>
-                  <p className="text-sm text-neutral-500">{firebaseUser.email}</p>
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 bg-neutral-50 rounded-2xl border border-neutral-100">
+                <div className="flex items-center gap-4 flex-1">
+                  <img src={firebaseUser.photoURL || ''} alt="User" className="w-12 h-12 rounded-full border border-neutral-200" />
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-bold text-neutral-900 truncate">{firebaseUser.displayName}</h4>
+                    <p className="text-sm text-neutral-500 truncate">{firebaseUser.email}</p>
+                  </div>
                 </div>
                 <button 
                   onClick={handleLogout}
-                  className="px-4 py-2 bg-white border border-neutral-200 hover:bg-neutral-100 text-neutral-900 text-sm font-bold rounded-lg transition-all flex items-center gap-2"
+                  className="w-full sm:w-auto px-4 py-2 bg-white border border-neutral-200 hover:bg-neutral-100 text-neutral-900 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2"
                 >
                   <LogOut size={16} /> Desconectar
                 </button>
               </div>
+              
+              <div className="border-t border-neutral-100 pt-6 mt-6">
+                <h4 className="text-sm font-bold text-neutral-900 mb-4">Integrações Workspace</h4>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-white border border-neutral-200 rounded-xl">
+                     <span className="text-sm font-medium text-neutral-700">Google Drive</span>
+                     <span className="text-xs font-bold text-neutral-400 bg-neutral-100 px-2 py-1 rounded-md">Não conectado</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-white border border-neutral-200 rounded-xl">
+                     <span className="text-sm font-medium text-neutral-700">Google Calendar</span>
+                     <span className="text-xs font-bold text-neutral-400 bg-neutral-100 px-2 py-1 rounded-md">Não conectado</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-white border border-neutral-200 rounded-xl">
+                     <span className="text-sm font-medium text-neutral-700">Google Tasks</span>
+                     <span className="text-xs font-bold text-neutral-400 bg-neutral-100 px-2 py-1 rounded-md">Não conectado</span>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </section>
+
 
         {/* Onboarding & Perfil */}
         {hasCompletedOnboarding && (

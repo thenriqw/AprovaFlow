@@ -26,8 +26,9 @@ export default function CreatePlan() {
       });
       setActiveTab('today');
 
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      alert(e.message || "Erro ao criar plano.");
     } finally {
       setLoading(false);
     }
