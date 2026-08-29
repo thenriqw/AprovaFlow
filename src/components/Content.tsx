@@ -1,20 +1,30 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
-import { ChevronRight, FileText, PlayCircle, Plus, Edit2, Trash2 } from 'lucide-react';
+import { ChevronRight, FileText, PlayCircle, Plus, Edit2, Trash2, BookOpen } from 'lucide-react';
 import type { Subject, Topic, StudyActivity } from '../domain/types';
 
 export default function Content() {
-  const { v2Subjects, v2Topics, v2Activities, addV2Subject, deleteV2Subject, addV2Topic, deleteV2Topic, syncCycleWithSubjects, recalculateRoute } = useStore();
+  const { v2Subjects, v2Topics, v2Activities, activePlanId, addV2Subject, deleteV2Subject, addV2Topic, deleteV2Topic, syncCycleWithSubjects, recalculateRoute } = useStore();
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [isAddingSubject, setIsAddingSubject] = useState(false);
   const [newSubjectName, setNewSubjectName] = useState('');
+
   const [addingTopicTo, setAddingTopicTo] = useState<string | null>(null);
   const [newTopicName, setNewTopicName] = useState('');
+  
+  const [addingActivityTo, setAddingActivityTo] = useState<string | null>(null);
+  const [newActivityTitle, setNewActivityTitle] = useState('');
+  const [newActivityType, setNewActivityType] = useState<StudyActivity['type']>('Leitura');
+  const [newActivityDuration, setNewActivityDuration] = useState('');
+  
+  const { addV2Activity, deleteV2Activity } = useStore();
+
 
   const handleAddSubject = () => {
-    if (!newSubjectName.trim()) return;
+    if (!newSubjectName.trim() || !activePlanId) return;
     const newSubject: Subject = {
       id: 'sub_' + Date.now().toString(),
+      planId: activePlanId,
       name: newSubjectName.trim(),
       difficulty: 3,
       importance: 3,
@@ -31,9 +41,10 @@ export default function Content() {
   };
 
   const handleAddTopic = (subjectId: string) => {
-    if (!newTopicName.trim()) return;
+    if (!newTopicName.trim() || !activePlanId) return;
     const newTopic: Topic = {
       id: 'top_' + Date.now().toString(),
+      planId: activePlanId,
       subjectId,
       name: newTopicName.trim(),
       createdAt: new Date().toISOString(),

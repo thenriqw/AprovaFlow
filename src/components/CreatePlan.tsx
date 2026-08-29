@@ -3,10 +3,12 @@ import { useStore } from '../store';
 import { ChevronRight } from 'lucide-react';
 
 export default function CreatePlan() {
-  const { setActiveTab, completeOnboarding } = useStore();
+  const { setActiveTab, createPlan } = useStore();
+
   const [name, setName] = useState('');
   const [objective, setObjective] = useState('');
   const [examDate, setExamDate] = useState('');
+  const [hoursPerDay, setHoursPerDay] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -15,15 +17,15 @@ export default function CreatePlan() {
     
     setLoading(true);
     try {
-      // Re-use completeOnboarding logic, passing the new name
-      await completeOnboarding({
-        examName: name, // We map examName to Plan name in DB
-        objective,
+      const hrs = parseInt(hoursPerDay) || 0;
+      await createPlan({
+        name: name.trim(),
+        objective: objective.trim(),
         examDate,
-        availableTimePerDay: { 0:0, 1:2, 2:2, 3:2, 4:2, 5:2, 6:0 }, // Default, can be adjusted later
-        subjects: [] // Empty to start
+        availableTimePerDay: { 0:0, 1:hrs, 2:hrs, 3:hrs, 4:hrs, 5:hrs, 6:0 }
       });
       setActiveTab('today');
+
     } catch (e) {
       console.error(e);
     } finally {
@@ -64,6 +66,7 @@ export default function CreatePlan() {
               className="w-full p-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-neutral-900 focus:outline-none"
             />
           </div>
+
           <div>
             <label className="block text-sm font-bold text-neutral-900 mb-1">Data da Prova (Opcional)</label>
             <input 
@@ -73,7 +76,20 @@ export default function CreatePlan() {
               className="w-full p-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-neutral-900 focus:outline-none text-neutral-900"
             />
           </div>
+          <div>
+            <label className="block text-sm font-bold text-neutral-900 mb-1">Horas de Estudo por Dia (Opcional)</label>
+            <input 
+              type="number" 
+              min="0"
+              max="24"
+              placeholder="Ex: 2"
+              value={hoursPerDay} 
+              onChange={e => setHoursPerDay(e.target.value)} 
+              className="w-full p-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-neutral-900 focus:outline-none text-neutral-900"
+            />
+          </div>
         </div>
+
 
         <div className="pt-4 flex justify-end gap-3">
           <button 

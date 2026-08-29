@@ -7,23 +7,26 @@ export default function Onboarding() {
   const { completeOnboarding } = useStore();
   const [step, setStep] = useState<'options' | 'loading'>('options');
 
+
+
   const handleSelectPath = async (path: string) => {
+    if (path === 'objective') {
+      useStore.getState().setActiveTab('create-plan');
+      return;
+    }
+    
     setStep('loading');
     
-    // For free mode, 0h available per day so it doesn't inflate capacity
     const defaultProfile = {
-      objective: path === 'free' ? 'Modo Livre' : 'Novo Plano',
-      examName: '', examDate: '',
-      availableTimePerDay: path === 'free' ? { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 } : { 0: 0, 1: 2, 2: 2, 3: 2, 4: 2, 5: 2, 6: 0 },
+      objective: path === 'free' ? 'Modo Livre' : '',
+      examName: path === 'free' ? 'Estudo Livre' : path === 'import' ? 'Meu Edital' : path === 'manual' ? 'Plano Manual' : 'Novo Plano',
+      examDate: '',
+      availableTimePerDay: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
       subjects: []
     };
-
+    
     try {
-      if (path === 'objective') {
-        // We will just complete with default and let them edit it in CreatePlan or PlanOverview
-        await completeOnboarding(defaultProfile);
-        useStore.getState().setActiveTab('plan');
-      } else if (path === 'import') {
+      if (path === 'import') {
         await completeOnboarding(defaultProfile);
         useStore.getState().setActiveTab('inbox');
       } else if (path === 'manual') {
@@ -39,6 +42,7 @@ export default function Onboarding() {
       alert("Erro ao criar plano. Tente novamente.");
     }
   };
+
 
   if (step === 'loading') {
     return (

@@ -45,6 +45,7 @@ export interface Subject {
 }
 
 export interface Topic {
+  planId?: string;
   id: string;
   subjectId: string;
   name: string;

@@ -17,17 +17,20 @@ export default function PlanOverview() {
     );
   }
 
+
   // Calculate Capacity
-  const weeklyCapacityMinutes = Object.values(activePlan.availableTimePerDay || {}).reduce((a, b) => a + b, 0) * 60;
+  const hasAvailability = activePlan.availableTimePerDay && Object.values(activePlan.availableTimePerDay).some(h => h > 0);
+  const weeklyCapacityHours = hasAvailability ? Object.values(activePlan.availableTimePerDay).reduce((a, b) => a + b, 0) : 0;
+  const weeklyCapacityMinutes = weeklyCapacityHours * 60;
   
   // Calculate Demand
   let totalDemandMinutes = 0;
   let pendingDemandMinutes = 0;
   if (v2Activities && v2Activities.length > 0) {
-    totalDemandMinutes = v2Activities.reduce((acc, act) => acc + (Math.round(act.expectedDurationSeconds / 60) || 0), 0);
+    totalDemandMinutes = v2Activities.reduce((acc, act) => acc + (Math.round((act.expectedDurationSeconds || 0) / 60)), 0);
     pendingDemandMinutes = v2Activities
       .filter(act => act.status !== 'completed')
-      .reduce((acc, act) => acc + (Math.round(act.expectedDurationSeconds / 60) || 0), 0);
+      .reduce((acc, act) => acc + (Math.round((act.expectedDurationSeconds || 0) / 60)), 0);
   }
 
   const daysToExam = activePlan.examDate 
@@ -35,7 +38,9 @@ export default function PlanOverview() {
     : null;
 
   const totalWeeks = daysToExam ? Math.ceil(daysToExam / 7) : null;
-  const totalCapacityRemaining = totalWeeks ? totalWeeks * weeklyCapacityMinutes : null;
+  const totalCapacityRemaining = totalWeeks && hasAvailability ? totalWeeks * weeklyCapacityMinutes : null;
+  const isOverloaded = totalCapacityRemaining !== null && pendingDemandMinutes > totalCapacityRemaining;
+
 
   const planStatus = daysToExam !== null && daysToExam === 0 ? 'Concluído' : 'Ativo';
 
@@ -79,7 +84,17 @@ export default function PlanOverview() {
           <p className="text-sm text-neutral-500 mt-1">Sua preparação cabe no tempo que você tem?</p>
         </div>
         <div className="p-6">
-          {(!v2Activities || v2Activities.length === 0) ? (
+
+          {!hasAvailability ? (
+            <div className="text-center py-10">
+              <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Clock size={24} className="text-neutral-400" />
+              </div>
+              <p className="text-neutral-900 font-medium">Configure sua disponibilidade</p>
+              <p className="text-neutral-500 text-sm mt-1 max-w-md mx-auto">Adicione seu tempo de estudo diário para calcular se o plano cabe na sua rotina.</p>
+            </div>
+          ) : (!v2Activities || v2Activities.length === 0) ? (
+
             <div className="text-center py-10">
               <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <AlertTriangle size={24} className="text-neutral-400" />

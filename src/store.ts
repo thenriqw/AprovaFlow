@@ -56,6 +56,7 @@ export interface StudySession {
 }
 
 export interface CycleItem {
+  reasons?: string[];
   id: string;
   subjectId?: string;
   topicId?: string;
@@ -116,6 +117,9 @@ interface AppState {
   addV2Topic: (topic: Topic) => void;
   updateV2Topic: (topic: Topic) => void;
   deleteV2Topic: (id: string) => void;
+  addV2Activity: (activity: StudyActivity) => void;
+  updateV2Activity: (activity: StudyActivity) => void;
+  deleteV2Activity: (id: string) => void;
   setActiveTask: (task: ActiveTaskInfo | null) => void;
   completeCycleItem: (id: string) => void;
   setWeeklyGoalHours: (hours: number) => void;
@@ -135,6 +139,7 @@ interface AppState {
   setActiveTab: (tab: string) => void;
   setActivePlan: (planId: string) => void;
   switchPlan: (planId: string) => Promise<void>;
+  createPlan: (planData: { name: string, objective: string, examDate: string, availableTimePerDay: Record<number, number> }) => Promise<void>;
 }
 
 // (Block removed from here, moving down)
@@ -148,19 +153,24 @@ if (typeof window !== 'undefined') {
 }
 
 // Pure function for priority score
+
 export function calculatePriorityScore(item: CycleItem, state: AppState): { score: number, reasons: string[], duration?: number } {
   let score = 0;
   const reasons: string[] = [];
   
-  // 1. Importance and Difficulty (from UserProfile)
-  const sub = state.userProfile?.subjects?.find(s => s.id === item.subjectId || s.name === item.subject);
+  if (item.status === 'next') {
+    score += 1000;
+  }
+  
+  // 1. Importance and Difficulty (from V2)
+  const sub = state.v2Subjects.find(s => s.id === item.subjectId);
   if (sub) {
     score += sub.importance * 10;
     reasons.push(`importância ${sub.importance}/5`);
-    if (sub.difficulty === 'high') {
+    if (sub.difficulty > 3) {
       score += 30;
       reasons.push('dificuldade alta');
-    } else if (sub.difficulty === 'medium') {
+    } else if (sub.difficulty === 3) {
       score += 15;
       reasons.push('dificuldade média');
     }
@@ -172,13 +182,15 @@ export function calculatePriorityScore(item: CycleItem, state: AppState): { scor
   }
   
   // 3. Exam Proximity (if any)
+  const activePlan = state.plans.find(p => p.id === state.activePlanId);
   let isCloseToExam = false;
-  if (state.userProfile?.examDate) {
-    const daysToExam = (new Date(state.userProfile.examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+  if (activePlan?.examDate) {
+    const daysToExam = (new Date(activePlan.examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
     if (daysToExam > 0 && daysToExam < 30) {
       isCloseToExam = true;
     }
   }
+
   
   // 4. Session History (Performance & Time)
   const subjectSessions = state.sessions.filter(s => 
@@ -310,6 +322,7 @@ export const useStore = create<AppState>()(
       activeTab: 'today',
       setActiveTab: (tab) => set({ activeTab: tab }),
       setActivePlan: (planId) => set({ activePlanId: planId }),
+      createPlan: async () => {},
       switchPlan: async (planId) => {
         const state = get();
         if (!state.firebaseUser) {
@@ -405,79 +418,53 @@ export const useStore = create<AppState>()(
         
         return { cycleQueue: [...state.cycleQueue.filter(i => i.status === 'done'), ...next] };
       }),
+
+
       syncCycleWithSubjects: () => set((state) => {
-        if (!state.userProfile) return state;
-        
-        const newQueue = [...state.cycleQueue];
-        const existingMap = new Set(newQueue.map(i => `${i.subjectId}-${i.topicId}`));
-        
-        // Remove deleted/archived subjects from pending
-        const activeSubjects = state.userProfile.subjects.filter(s => !s.isArchived);
+        // We only care about V2 now
+        const activeSubjects = state.v2Subjects.filter(s => !s.isArchived);
         const validSubjectIds = new Set(activeSubjects.map(s => s.id));
         
-        for (let i = newQueue.length - 1; i >= 0; i--) {
-          const item = newQueue[i];
-          if (item.status === 'done') continue;
-          
-          if (item.subjectId && !validSubjectIds.has(item.subjectId)) {
-            newQueue.splice(i, 1);
-            continue;
-          }
-          
-          const subject = activeSubjects.find(s => s.id === item.subjectId);
-          if (subject) {
-            // Update canonical names in case they changed
-            item.subject = subject.name;
-            item.weight = subject.importance;
-
-            if (item.topicId) {
-              const topic = subject.topics.find(t => t.id === item.topicId);
-              if (!topic) {
-                newQueue.splice(i, 1);
-              } else {
-                item.topic = topic.name; // canonical renaming
-              }
-            } else if (item.topic === 'Geral' && subject.topics.length > 0) {
-              // Lifecycle de Geral: remove Geral placeholder if real topics were added
-              newQueue.splice(i, 1);
-            }
-          }
-        }
+        let newQueue = state.cycleQueue.filter(item => {
+          if (!item.subjectId || !validSubjectIds.has(item.subjectId)) return false;
+          const topicExists = state.v2Topics.some(t => t.id === item.topicId);
+          if (!topicExists) return false;
+          return true;
+        });
         
-        // Add new subjects/topics
+        const existingMap = new Set(newQueue.map(i => `${i.subjectId}-${i.topicId}`));
+        
         activeSubjects.forEach(subject => {
-          if (subject.topics.length === 0) {
-            const key = `${subject.id}-undefined`;
-            if (!existingMap.has(key) && !newQueue.some(i => i.subjectId === subject.id && !i.topicId)) {
+          const topics = state.v2Topics.filter(t => t.subjectId === subject.id);
+          
+          topics.forEach(topic => {
+            const key = `${subject.id}-${topic.id}`;
+            if (!existingMap.has(key)) {
               newQueue.push({
-                id: crypto.randomUUID(),
+                id: 'cq_' + crypto.randomUUID().split('-')[0],
                 subjectId: subject.id,
                 subject: subject.name,
-                topic: 'Geral', // Fallback for no topics
-                weight: subject.importance,
+                topicId: topic.id,
+                topic: topic.name,
+                weight: subject.importance || 3,
                 status: 'pending'
               });
+              existingMap.add(key);
             }
-          } else {
-            subject.topics.forEach(topic => {
-              const key = `${subject.id}-${topic.id}`;
-              if (!existingMap.has(key) && !newQueue.some(i => i.subjectId === subject.id && i.topicId === topic.id)) {
-                newQueue.push({
-                  id: crypto.randomUUID(),
-                  subjectId: subject.id,
-                  topicId: topic.id,
-                  subject: subject.name,
-                  topic: topic.name,
-                  weight: subject.importance,
-                  status: 'pending'
-                });
-              }
-            });
-          }
+          });
         });
+        
+        // Ensure there's a next item
+        const hasNext = newQueue.some(i => i.status === 'next');
+        if (!hasNext) {
+          const firstPending = newQueue.find(i => i.status === 'pending');
+          if (firstPending) firstPending.status = 'next';
+        }
         
         return { cycleQueue: newQueue };
       }),
+
+
 
       addV2Subject: (subject) => set(state => {
         const v2Subjects = [...state.v2Subjects, subject];
@@ -524,15 +511,44 @@ export const useStore = create<AppState>()(
         }
         return { v2Topics };
       }),
+
       deleteV2Topic: (id) => set(state => {
         const v2Topics = state.v2Topics.filter(t => t.id !== id);
         if (state.firebaseUser && state.activePlanId) {
           import('./lib/db').then(({ deletePlanDocument }) => 
-            deletePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'topics', id)
+            deletePlanDocument(state.firebaseUser.uid, state.activePlanId, 'topics', id)
           ).catch(console.error);
         }
         return { v2Topics };
       }),
+      addV2Activity: (activity) => set(state => {
+        const v2Activities = [...state.v2Activities, activity];
+        if (state.firebaseUser && state.activePlanId) {
+          import('./lib/db').then(({ savePlanDocument }) => 
+            savePlanDocument(state.firebaseUser.uid, state.activePlanId, 'activities', activity)
+          ).catch(console.error);
+        }
+        return { v2Activities };
+      }),
+      updateV2Activity: (activity) => set(state => {
+        const v2Activities = state.v2Activities.map(a => a.id === activity.id ? activity : a);
+        if (state.firebaseUser && state.activePlanId) {
+          import('./lib/db').then(({ savePlanDocument }) => 
+            savePlanDocument(state.firebaseUser.uid, state.activePlanId, 'activities', activity)
+          ).catch(console.error);
+        }
+        return { v2Activities };
+      }),
+      deleteV2Activity: (id) => set(state => {
+        const v2Activities = state.v2Activities.filter(a => a.id !== id);
+        if (state.firebaseUser && state.activePlanId) {
+          import('./lib/db').then(({ deletePlanDocument }) => 
+            deletePlanDocument(state.firebaseUser.uid, state.activePlanId, 'activities', id)
+          ).catch(console.error);
+        }
+        return { v2Activities };
+      }),
+
 
       setActiveTask: (task) => set({ activeTask: task }),
       completeCycleItem: (id) => set((state) => {
@@ -592,7 +608,7 @@ export const useStore = create<AppState>()(
           const newPlan: Plan = {
             id: newPlanId,
             userId: uid,
-            name: 'Meu Plano Principal',
+            name: profile.examName || 'Meu Plano Principal',
             objective: profile.objective || '',
             examDate: profile.examDate || '',
             availableTimePerDay: profile.availableTimePerDay || {},

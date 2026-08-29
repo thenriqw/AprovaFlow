@@ -2,6 +2,7 @@ import React from 'react';
 import { useStore } from '../store';
 import { Play, CalendarCheck, TrendingUp, Clock } from 'lucide-react';
 import { calculatePriorityScore } from '../store';
+import { formatDuration } from '../lib/utils';
 
 export default function Today() {
   const { userProfile, cycleQueue, sessions, setActiveTab, activePlanId, plans, setActiveTask } = useStore();
@@ -23,17 +24,23 @@ export default function Today() {
 
   // Get next task
   const state = useStore.getState();
+  
+  // Single source of truth for the next task
+  const nextTask = cycleQueue.find(item => item.status === 'next') || cycleQueue.find(item => item.status === 'pending');
+  
+  if (nextTask && !nextTask.reasons) {
+    const scoreData = calculatePriorityScore(nextTask, state);
+    nextTask.reasons = scoreData.reasons;
+  }
+  
+  // Generate queue for the "Depois" module
   const queueWithScores = cycleQueue
-    .filter(item => item.status === 'pending' || item.status === 'next')
+    .filter(item => item.status === 'pending')
     .map(item => {
       const scoreData = calculatePriorityScore(item, state);
       return { ...item, score: scoreData.score, reasons: scoreData.reasons };
     })
     .sort((a, b) => b.score - a.score);
-
-  const nextTask = queueWithScores[0];
-  
-  // Find recommended activity if we have v2Activities
   const { v2Activities } = state;
   const recommendedActivity = nextTask && v2Activities?.find(a => 
     a.topicId === nextTask.topicId && a.status !== 'completed'
@@ -55,18 +62,14 @@ export default function Today() {
 
   const weeklySessions = sessions.filter(s => new Date(s.date) >= startOfWeek);
   const weeklySeconds = weeklySessions.reduce((acc, s) => acc + (s.durationSeconds || 0), 0);
-  const weeklyHours = Math.round((weeklySeconds / 3600) * 10) / 10;
   
-  const weeklyProgress = state.weeklyGoalHours > 0 
-    ? Math.min(100, Math.round((weeklyHours / state.weeklyGoalHours) * 100))
+  const hasWeeklyGoal = state.weeklyGoalHours > 0;
+  const weeklyProgress = hasWeeklyGoal 
+    ? Math.min(100, Math.round(((weeklySeconds / 3600) / state.weeklyGoalHours) * 100))
     : 0;
 
   const formatHours = (h: number) => {
-    const hrs = Math.floor(h);
-    const mins = Math.round((h - hrs) * 60);
-    if (hrs > 0 && mins > 0) return `${hrs}h${mins.toString().padStart(2, '0')}m`;
-    if (hrs > 0) return `${hrs}h`;
-    return `${mins}m`;
+    return formatDuration(h * 3600);
   };
 
   return (
@@ -154,7 +157,7 @@ export default function Today() {
                     {recommendedActivity.expectedDurationSeconds > 0 && (
                       <>
                         <span className="w-1 h-1 bg-neutral-300 rounded-full"></span>
-                        <span>{Math.round(recommendedActivity.expectedDurationSeconds / 60)} min</span>
+                        <span>{formatDuration(recommendedActivity.expectedDurationSeconds)}</span>
                       </>
                     )}
                   </div>
@@ -202,13 +205,24 @@ export default function Today() {
             <p className="text-sm text-neutral-500 mb-4">Progresso em relação à meta</p>
           </div>
           <div className="mt-auto">
-            <div className="flex justify-between items-end mb-2">
-              <span className="text-3xl font-serif font-bold text-neutral-900">{weeklyHours}<span className="text-lg text-neutral-400">h</span></span>
-              <span className="text-sm font-medium text-neutral-500">Meta: {state.weeklyGoalHours}h</span>
-            </div>
-            <div className="h-3 w-full bg-neutral-100 rounded-full overflow-hidden">
-              <div className="h-full bg-neutral-900 rounded-full transition-all duration-1000" style={{ width: `${weeklyProgress}%` }}></div>
-            </div>
+            {hasWeeklyGoal ? (
+              <>
+                <div className="flex justify-between items-end mb-2">
+                  <span className="text-3xl font-serif font-bold text-neutral-900">{formatDuration(weeklySeconds)}</span>
+                  <span className="text-sm font-medium text-neutral-500">Meta: {formatHours(state.weeklyGoalHours)}</span>
+                </div>
+                <div className="h-3 w-full bg-neutral-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-neutral-900 rounded-full transition-all duration-1000" style={{ width: `${weeklyProgress}%` }}></div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between items-end mb-2">
+                  <span className="text-3xl font-serif font-bold text-neutral-900">{formatDuration(weeklySeconds)}</span>
+                </div>
+                <p className="text-sm font-medium text-neutral-500 mt-2">Meta semanal não configurada</p>
+              </>
+            )}
           </div>
         </div>
       </div>

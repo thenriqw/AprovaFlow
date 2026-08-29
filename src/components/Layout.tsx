@@ -23,9 +23,10 @@ interface LayoutProps {
 }
 
 export default function Layout({ children, activeTab, setActiveTab }: LayoutProps) {
-  const { plans, activePlanId, setActivePlan } = useStore();
+  const { plans, activePlanId, switchPlan } = useStore();
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
+  const [isSwitching, setIsSwitching] = useState(false);
   
   const activePlan = plans?.find(p => p.id === activePlanId);
 
@@ -66,13 +67,26 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
                 {plans?.map(plan => (
                   <button
                     key={plan.id}
-                    onClick={() => {
-                      if (setActivePlan) setActivePlan(plan.id);
+                    onClick={async () => {
+                      if (plan.id === activePlanId) {
+                        setShowPlanMenu(false);
+                        return;
+                      }
+                      setIsSwitching(true);
                       setShowPlanMenu(false);
+                      try {
+                        await switchPlan(plan.id);
+                      } catch (e) {
+                        console.error(e);
+                      } finally {
+                        setIsSwitching(false);
+                      }
                     }}
+                    disabled={isSwitching}
                     className={cn(
                       "w-full px-3 py-2 text-left text-sm hover:bg-neutral-50 transition-colors flex items-center justify-between",
-                      plan.id === activePlanId ? "font-semibold text-neutral-900" : "text-neutral-600"
+                      plan.id === activePlanId ? "font-semibold text-neutral-900" : "text-neutral-600",
+                      isSwitching && "opacity-50 cursor-not-allowed"
                     )}
                   >
                     <span className="truncate">{plan.name}</span>
@@ -130,13 +144,78 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto bg-neutral-50 pb-24 md:pb-0 relative">
-        <div className="max-w-4xl mx-auto p-4 md:p-10 min-h-full">
+      <main className="flex-1 flex flex-col overflow-y-auto bg-neutral-50 pb-24 md:pb-0 relative">
+        
+        {/* Mobile Header */}
+        <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-neutral-200 sticky top-0 z-30">
+          <span className="font-serif font-semibold text-lg tracking-tight text-neutral-900">{APP_NAME}</span>
+          
+          <div className="relative">
+            <button 
+              onClick={() => setShowPlanMenu(!showPlanMenu)}
+              className="flex items-center gap-2 text-sm font-semibold text-neutral-900 bg-neutral-100 hover:bg-neutral-200 px-3 py-1.5 rounded-full transition-colors"
+            >
+              {isSwitching ? 'Carregando...' : (activePlan?.name || 'Sem plano')}
+              <ChevronDown size={14} className={cn("transition-transform", showPlanMenu && "rotate-180")} />
+            </button>
+
+            {showPlanMenu && (
+              <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-neutral-200 overflow-hidden z-50">
+                <div className="p-2 text-xs font-bold text-neutral-500 uppercase tracking-wider">
+                  Seus Planos
+                </div>
+                {plans?.map(plan => (
+                  <button
+                    key={plan.id}
+                    onClick={async () => {
+                      if (plan.id === activePlanId) {
+                        setShowPlanMenu(false);
+                        return;
+                      }
+                      setIsSwitching(true);
+                      setShowPlanMenu(false);
+                      try {
+                        await switchPlan(plan.id);
+                      } catch (e) {
+                        console.error(e);
+                      } finally {
+                        setIsSwitching(false);
+                      }
+                    }}
+                    disabled={isSwitching}
+                    className={cn(
+                      "w-full px-3 py-2 text-left text-sm hover:bg-neutral-50 transition-colors flex items-center justify-between",
+                      plan.id === activePlanId ? "font-semibold text-neutral-900" : "text-neutral-600",
+                      isSwitching && "opacity-50 cursor-not-allowed"
+                    )}
+                  >
+                    <span className="truncate">{plan.name}</span>
+                    {plan.id === activePlanId && <div className="w-1.5 h-1.5 rounded-full bg-neutral-900"></div>}
+                  </button>
+                ))}
+                {plans?.length > 0 && <div className="h-px bg-neutral-100 my-1"></div>}
+                <button 
+                  onClick={() => {
+                    setActiveTab('create-plan');
+                    setShowPlanMenu(false);
+                  }}
+                  className="w-full px-3 py-2 text-left text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors flex items-center gap-2"
+                >
+                  <Plus size={14} />
+                  Criar novo plano
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1 max-w-5xl w-full mx-auto p-4 md:p-10">
           {children}
         </div>
       </main>
 
       {/* Global FAB Mobile */}
+      {(!['settings', 'create-plan', 'onboarding'].includes(activeTab)) && (
       <div className="md:hidden fixed bottom-20 right-4 z-50">
         <div className="relative">
           {showFabMenu && (
@@ -160,6 +239,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
           </button>
         </div>
       </div>
+      )}
 
       {/* Bottom Nav Mobile */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 px-2 py-2 pb-safe flex justify-between items-center z-40">
