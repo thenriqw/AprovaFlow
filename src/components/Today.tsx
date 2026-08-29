@@ -48,7 +48,17 @@ export default function Today() {
 
   const handleStart = () => {
     if (nextTask) {
-      setActiveTask(nextTask);
+      if (recommendedActivity) {
+        setActiveTask({
+          ...nextTask,
+          activityId: recommendedActivity.id,
+          activityType: recommendedActivity.type as any,
+          source: recommendedActivity.title,
+          expectedDurationSeconds: recommendedActivity.expectedDurationSeconds
+        });
+      } else {
+        setActiveTask(nextTask);
+      }
     } else {
       setActiveTask(null);
     }

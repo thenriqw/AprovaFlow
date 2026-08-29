@@ -86,6 +86,7 @@ export default function Timer() {
     addSession({
       subjectId: currentSubjectId,
       topicId: currentTopicId,
+      activityId: activeTask?.activityId,
       subject: subject || 'Livre',
       topic,
       activityType,

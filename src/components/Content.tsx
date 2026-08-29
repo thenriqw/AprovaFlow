@@ -22,6 +22,7 @@ export default function Content() {
   const [newActivityTitle, setNewActivityTitle] = useState('');
   const [newActivityType, setNewActivityType] = useState<StudyActivity['type']>('Leitura');
   const [newActivityDuration, setNewActivityDuration] = useState('');
+  const [newActivitySource, setNewActivitySource] = useState('');
   
   const { addV2Activity, deleteV2Activity } = useStore();
 
@@ -81,7 +82,7 @@ export default function Content() {
     }
   };
 
-  const handleAddActivity = (topicId: string, subjectId: string) => {
+const handleAddActivity = (topicId: string, subjectId: string) => {
     if (!newActivityTitle.trim() || !activePlanId) return;
     const durationMins = parseInt(newActivityDuration) || 0;
     
@@ -92,6 +93,7 @@ export default function Content() {
       topicId,
       title: newActivityTitle.trim(),
       type: newActivityType,
+      source: newActivitySource.trim(),
       status: 'pending' as const,
       expectedDurationSeconds: durationMins * 60,
       createdAt: new Date().toISOString(),
@@ -101,6 +103,7 @@ export default function Content() {
     addV2Activity(newActivity);
     setNewActivityTitle('');
     setNewActivityDuration('');
+    setNewActivitySource('');
     setAddingActivityTo(null);
   };
 
@@ -168,19 +171,56 @@ export default function Content() {
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="font-bold pr-2">{subject.name}</h3>
+                    {editingSubject === subject.id ? (
+                      <input
+                        type="text"
+                        autoFocus
+                        defaultValue={subject.name}
+                        onBlur={(e) => {
+                          if (e.target.value.trim() && e.target.value !== subject.name) {
+                            updateV2Subject({ ...subject, name: e.target.value.trim() });
+                          }
+                          setEditingSubject(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.currentTarget.blur();
+                        }}
+                        className="font-bold text-neutral-900 bg-white border border-neutral-200 rounded px-1 max-w-[150px] focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <h3 className="font-bold pr-2 flex items-center gap-2">
+                        {subject.name}
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setEditingSubject(subject.id); }}
+                          className="p-1 text-neutral-400 hover:text-neutral-900 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                          title="Renomear matéria"
+                        >
+                          <Edit2 size={12} />
+                        </button>
+                      </h3>
+                    )}
                     <p className={`text-xs mt-1 ${isSelected ? 'text-neutral-300' : 'text-neutral-500'}`}>
                       {subjectTopics.length} tópicos
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 items-end">
-                    <button 
-                      onClick={(e) => handleDeleteSubject(subject.id, e)} 
-                      className={`p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity ${isSelected ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-red-50 hover:text-red-600 text-neutral-400'}`}
-                      title="Excluir"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); updateV2Subject({ ...subject, isArchived: !subject.isArchived }); }}
+                        className={`p-1.5 rounded-lg ${isSelected ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-400'}`}
+                        title={subject.isArchived ? "Desarquivar" : "Arquivar"}
+                      >
+                        <FileText size={14} className={subject.isArchived ? 'text-blue-400' : ''} />
+                      </button>
+                      <button 
+                        onClick={(e) => handleDeleteSubject(subject.id, e)} 
+                        className={`p-1.5 rounded-lg ${isSelected ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-red-50 hover:text-red-600 text-neutral-400'}`}
+                        title="Excluir"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                     <ChevronRight size={18} className={isSelected ? 'text-white' : 'text-neutral-400'} />
                   </div>
                 </div>
@@ -250,11 +290,15 @@ export default function Content() {
                               className="font-bold text-neutral-900 bg-white border border-neutral-200 rounded px-1 w-full focus:outline-none focus:ring-1 focus:ring-neutral-900"
                             />
                           ) : (
-                            <h4 
-                              className="font-bold text-neutral-900"
-                              onDoubleClick={() => setEditingTopic(topic.id)}
-                            >
+                            <h4 className="font-bold text-neutral-900 flex items-center gap-2">
                               {topic.name}
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); setEditingTopic(topic.id); }}
+                                className="p-1 text-neutral-400 hover:text-neutral-900 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                                title="Renomear tópico"
+                              >
+                                <Edit2 size={12} />
+                              </button>
                             </h4>
                           )}
                           <span className="text-xs font-medium px-2 py-1 bg-neutral-100 rounded-md text-neutral-600">
@@ -263,7 +307,7 @@ export default function Content() {
                         </div>
                         <button 
                           onClick={() => handleDeleteTopic(topic.id)}
-                          className="p-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="p-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-600 rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -272,36 +316,94 @@ export default function Content() {
                       {activities.length > 0 ? (
                         <div className="space-y-2 mt-4">
                           {activities.map(act => (
-                            <div key={act.id} className="group/act flex items-center gap-3 text-sm bg-neutral-50 p-3 rounded-lg border border-neutral-100">
+                            <div key={act.id} className={`group/act flex ${editingActivity === act.id ? 'items-start' : 'items-center'} gap-3 text-sm bg-neutral-50 p-3 rounded-lg border border-neutral-100`}>
                               {act.type === 'Videoaula' ? <PlayCircle size={16} className="text-blue-500" /> : <FileText size={16} className="text-neutral-400" />}
                               {editingActivity === act.id ? (
-                                <input
-                                  type="text"
-                                  autoFocus
-                                  defaultValue={act.title}
-                                  onBlur={(e) => {
-                                    if (e.target.value.trim() && e.target.value !== act.title) {
-                                      updateV2Activity({ ...act, title: e.target.value.trim() });
-                                    }
-                                    setEditingActivity(null);
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') e.currentTarget.blur();
-                                  }}
-                                  className="text-neutral-700 font-medium flex-1 bg-white border border-neutral-200 rounded px-1 focus:outline-none focus:ring-1 focus:ring-neutral-900"
-                                />
+<div className="flex-1 space-y-2 w-full">
+                                  <input
+                                    type="text"
+                                    autoFocus
+                                    defaultValue={act.title}
+                                    onChange={(e) => (act as any)._editTitle = e.target.value}
+                                    placeholder="Título"
+                                    className="w-full text-neutral-700 font-medium bg-white border border-neutral-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                                  />
+                                  <div className="flex gap-2">
+                                    <select 
+                                      defaultValue={act.type}
+                                      onChange={(e) => (act as any)._editType = e.target.value}
+                                      className="flex-1 p-1 text-xs bg-white border border-neutral-200 rounded-md focus:outline-none"
+                                    >
+                                      <option value="Leitura">Leitura</option>
+                                      <option value="Videoaula">Videoaula</option>
+                                      <option value="Questões">Questões</option>
+                                      <option value="Revisão">Revisão</option>
+                                      <option value="Simulado">Simulado</option>
+                                      <option value="Outro">Outro</option>
+                                    </select>
+                                    <input
+                                      type="number"
+                                      placeholder="Minutos"
+                                      defaultValue={act.expectedDurationSeconds > 0 ? Math.round(act.expectedDurationSeconds / 60) : ''}
+                                      onChange={(e) => (act as any)._editDuration = e.target.value}
+                                      className="w-1/3 p-1 text-xs bg-white border border-neutral-200 rounded-md focus:outline-none"
+                                    />
+                                  </div>
+                                  <input
+                                    type="text"
+                                    placeholder="Fonte (opcional)"
+                                    defaultValue={act.source || ''}
+                                    onChange={(e) => (act as any)._editSource = e.target.value}
+                                    className="w-full text-neutral-700 text-xs bg-white border border-neutral-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                                  />
+                                  <div className="flex justify-end gap-2 pt-1">
+                                    <button 
+                                      onClick={() => setEditingActivity(null)}
+                                      className="px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-200 rounded"
+                                    >
+                                      Cancelar
+                                    </button>
+                                    <button 
+                                      onClick={() => {
+                                        const title = (act as any)._editTitle !== undefined ? (act as any)._editTitle.trim() : act.title;
+                                        const type = (act as any)._editType || act.type;
+                                        const source = (act as any)._editSource !== undefined ? (act as any)._editSource.trim() : act.source;
+                                        const durationStr = (act as any)._editDuration !== undefined ? (act as any)._editDuration : (act.expectedDurationSeconds / 60).toString();
+                                        const durationMins = parseInt(durationStr) || 0;
+                                        
+                                        if (title) {
+                                          updateV2Activity({
+                                            ...act,
+                                            title,
+                                            type,
+                                            source,
+                                            expectedDurationSeconds: durationMins * 60
+                                          });
+                                        }
+                                        setEditingActivity(null);
+                                      }}
+                                      className="px-2 py-1 text-xs font-medium bg-neutral-900 text-white rounded hover:bg-neutral-800"
+                                    >
+                                      Salvar
+                                    </button>
+                                  </div>
+                                </div>
                               ) : (
-                                <span 
-                                  className="text-neutral-700 font-medium flex-1"
-                                  onDoubleClick={() => setEditingActivity(act.id)}
-                                >
+                                <span className="text-neutral-700 font-medium flex-1 flex items-center gap-2">
                                   {act.title}
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); setEditingActivity(act.id); }}
+                                    className="p-1 text-neutral-400 hover:text-neutral-900 opacity-100 sm:opacity-0 sm:group-hover/act:opacity-100 transition-opacity"
+                                    title="Editar"
+                                  >
+                                    <Edit2 size={12} />
+                                  </button>
                                 </span>
                               )}
                               {act.expectedDurationSeconds > 0 && (
                                 <span className="text-xs text-neutral-400">{Math.round(act.expectedDurationSeconds / 60)} min</span>
                               )}
-                              <button onClick={() => deleteV2Activity(act.id)} className="opacity-0 group-hover/act:opacity-100 p-1 text-red-500 hover:bg-red-50 rounded">
+                              <button onClick={() => deleteV2Activity(act.id)} className="opacity-100 sm:opacity-0 sm:group-hover/act:opacity-100 p-1 text-red-500 hover:bg-red-50 rounded">
                                 <Trash2 size={14} />
                               </button>
                             </div>
@@ -321,7 +423,7 @@ export default function Content() {
                             className="w-full p-2 text-sm bg-white border border-neutral-200 rounded-md focus:ring-1 focus:ring-neutral-900 focus:outline-none"
                             autoFocus
                           />
-                          <div className="flex gap-2">
+<div className="flex gap-2">
                             <select 
                               value={newActivityType}
                               onChange={(e) => setNewActivityType(e.target.value as any)}
@@ -342,6 +444,13 @@ export default function Content() {
                               className="w-1/3 p-2 text-sm bg-white border border-neutral-200 rounded-md focus:outline-none"
                             />
                           </div>
+                          <input
+                            type="text"
+                            placeholder="Fonte (opcional) ex: Gran Cursos"
+                            value={newActivitySource}
+                            onChange={(e) => setNewActivitySource(e.target.value)}
+                            className="w-full p-2 text-sm bg-white border border-neutral-200 rounded-md focus:ring-1 focus:ring-neutral-900 focus:outline-none"
+                          />
                           <div className="flex gap-2 pt-1">
                             <button onClick={() => handleAddActivity(topic.id, topic.subjectId)} className="px-3 py-1.5 bg-neutral-900 text-white text-xs font-bold rounded-md hover:bg-neutral-800">
                               Adicionar

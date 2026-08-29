@@ -134,30 +134,6 @@ export default function Settings() {
           )}
         </section>
 
-
-        {/* Onboarding & Perfil */}
-        {hasCompletedOnboarding && (
-          <section className="bg-white p-6 md:p-8 rounded-3xl border border-neutral-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-neutral-100 text-neutral-600 rounded-lg">
-                <User size={20} />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-neutral-900">Meu Plano de Estudos</h3>
-                <p className="text-sm text-neutral-500">Altere seu objetivo, matérias ou disponibilidade de tempo.</p>
-              </div>
-            </div>
-            <button 
-              onClick={() => {
-                useStore.setState({ hasCompletedOnboarding: false });
-              }}
-              className="px-6 py-3 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-xl transition-all whitespace-nowrap"
-            >
-              Refazer Configuração
-            </button>
-          </section>
-        )}
-
         {/* Metas */}
         <section className="bg-white p-6 md:p-8 rounded-3xl border border-neutral-200 shadow-sm">
           <div className="flex items-center gap-3 mb-6">

@@ -53,6 +53,7 @@ export interface StudySession {
   difficulty?: 'low' | 'medium' | 'high';
   observation?: string;
   date: string; // ISO string
+  activityId?: string;
 }
 
 export interface CycleItem {
@@ -65,6 +66,7 @@ export interface CycleItem {
   activityType?: ActivityType;
   source?: string;
   resource?: Resource;
+  activityId?: string;
   expectedDurationSeconds?: number;
   weight: number; // For manual priority or calculated
   status: 'next' | 'pending' | 'done';
@@ -73,6 +75,7 @@ export interface CycleItem {
 
 interface ActiveTaskInfo {
   id?: string;
+  activityId?: string;
   subject: string;
   topic: string;
   subjectId?: string;
@@ -350,12 +353,6 @@ createPlan: async (planData) => {
           updatedAt: new Date().toISOString()
         };
 
-        const batch = writeBatch(db);
-        batch.set(doc(db, 'users', state.firebaseUser.uid, 'plans', newPlanId), newPlan);
-        batch.update(doc(db, 'users', state.firebaseUser.uid), { activePlanId: newPlanId });
-        
-        await batch.commit();
-
         const bridgedProfile = {
           objective: newPlan.objective,
           examName: newPlan.name,
@@ -365,6 +362,17 @@ createPlan: async (planData) => {
         };
 
         const weeklyGoalHours = Object.values(newPlan.availableTimePerDay).reduce((a, b) => a + b, 0);
+
+        const batch = writeBatch(db);
+        batch.set(doc(db, 'users', state.firebaseUser.uid, 'plans', newPlanId), newPlan);
+        batch.set(doc(db, 'users', state.firebaseUser.uid), { 
+          activePlanId: newPlanId,
+          hasCompletedOnboarding: true,
+          weeklyGoalHours: weeklyGoalHours
+        }, { merge: true });
+        
+        await batch.commit();
+
 
         set({
           plans: [...(state.plans || []), newPlan],
@@ -408,13 +416,15 @@ createPlan: async (planData) => {
             }))
           } : null;
 
-          // Update active plan in user doc
+// Update active plan in user doc
           const batch = writeBatch(db);
-          batch.update(doc(db, 'users', state.firebaseUser.uid), { activePlanId: planId });
+          const weeklyGoalHours = bridgedProfile ? Object.values(bridgedProfile.availableTimePerDay).reduce((a, b) => a + b, 0) : 0;
+          batch.set(doc(db, 'users', state.firebaseUser.uid), { activePlanId: planId, weeklyGoalHours }, { merge: true });
           await batch.commit();
 
           set({
             activePlanId: planId,
+            weeklyGoalHours,
             v2Subjects: planFullData.subjects,
             v2Topics: planFullData.topics,
             v2Activities: planFullData.activities,
@@ -444,12 +454,19 @@ createPlan: async (planData) => {
           throw error;
         }
       },
-      addSession: (session) => set((state) => ({
-        sessions: [
-          ...state.sessions,
-          { ...session, id: crypto.randomUUID(), date: new Date().toISOString() }
-        ]
-      })),
+addSession: (session) => set((state) => {
+        const newSession = { ...session, id: crypto.randomUUID(), date: new Date().toISOString() };
+        let newActivities = state.v2Activities || [];
+        if (session.activityId) {
+          newActivities = newActivities.map(a => 
+            a.id === session.activityId ? { ...a, status: 'completed' } : a
+          );
+        }
+        return {
+          sessions: [...state.sessions, newSession],
+          v2Activities: newActivities
+        };
+      }),
       removeSession: (id) => set((state) => ({
         sessions: state.sessions.filter(s => s.id !== id)
       })),
@@ -540,14 +557,28 @@ createPlan: async (planData) => {
         }
         return { v2Subjects };
       }),
-      deleteV2Subject: (id) => set(state => {
+deleteV2Subject: (id) => set(state => {
         const v2Subjects = state.v2Subjects.filter(s => s.id !== id);
+        const relatedTopics = state.v2Topics.filter(t => t.subjectId === id);
+        const v2Topics = state.v2Topics.filter(t => t.subjectId !== id);
+        const v2Activities = state.v2Activities.filter(a => a.subjectId !== id);
+        const cycleQueue = state.cycleQueue.filter(c => c.subjectId !== id);
+
         if (state.firebaseUser && state.activePlanId) {
-          import('./lib/db').then(({ deletePlanDocument }) => 
-            deletePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'subjects', id)
-          ).catch(console.error);
+          import('./lib/db').then(async ({ deletePlanDocument }) => {
+            const uid = state.firebaseUser.uid;
+            const pid = state.activePlanId;
+            await deletePlanDocument(uid, pid, 'subjects', id);
+            for (const t of relatedTopics) {
+              await deletePlanDocument(uid, pid, 'topics', t.id);
+            }
+            const relatedActivities = state.v2Activities.filter(a => a.subjectId === id);
+            for (const a of relatedActivities) {
+              await deletePlanDocument(uid, pid, 'activities', a.id);
+            }
+          }).catch(console.error);
         }
-        return { v2Subjects };
+        return { v2Subjects, v2Topics, v2Activities, cycleQueue };
       }),
       addV2Topic: (topic) => set(state => {
         const v2Topics = [...state.v2Topics, topic];
@@ -607,12 +638,26 @@ createPlan: async (planData) => {
 
 
       setActiveTask: (task) => set({ activeTask: task }),
-      completeCycleItem: (id) => set((state) => {
-        const newQueue: CycleItem[] = state.cycleQueue.map(item => 
-          (item.id === id) 
-            ? { ...item, status: 'done' } 
-            : item
+completeCycleItem: (id) => set((state) => {
+        const itemToComplete = state.cycleQueue.find(i => i.id === id);
+        if (!itemToComplete) return state;
+
+        const hasMoreActivities = state.v2Activities?.some(a => 
+          a.topicId === itemToComplete.topicId && a.status !== 'completed'
         );
+
+        let newQueue;
+        if (hasMoreActivities) {
+          // Keep it in the queue for the next activity, move to back
+          newQueue = state.cycleQueue.filter(i => i.id !== id);
+          newQueue.push({ ...itemToComplete, status: 'pending' });
+        } else {
+          // Topic fully completed
+          newQueue = state.cycleQueue.map(item => 
+            (item.id === id) ? { ...item, status: 'done' } : item
+          );
+        }
+
         const nextPendingIdx = newQueue.findIndex(i => i.status === 'pending');
         if (nextPendingIdx !== -1 && !newQueue.some(i => i.status === 'next')) {
           newQueue[nextPendingIdx].status = 'next';
