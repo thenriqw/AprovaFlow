@@ -432,6 +432,7 @@ createPlan: async (planData) => {
               id: s.id,
               subjectId: s.subjectId,
               topicId: s.topicId,
+              activityId: s.activityId,
               subject: planFullData.subjects.find(sub => sub.id === s.subjectId)?.name || '',
               topic: planFullData.topics.find(t => t.id === s.topicId)?.name || '',
               activityType: s.activityType,
@@ -599,14 +600,23 @@ deleteV2Subject: (id) => set(state => {
         return { v2Topics };
       }),
 
-      deleteV2Topic: (id) => set(state => {
+deleteV2Topic: (id) => set(state => {
         const v2Topics = state.v2Topics.filter(t => t.id !== id);
+        const v2Activities = state.v2Activities.filter(a => a.topicId !== id);
+        const cycleQueue = state.cycleQueue.filter(c => c.topicId !== id);
+
         if (state.firebaseUser && state.activePlanId) {
-          import('./lib/db').then(({ deletePlanDocument }) => 
-            deletePlanDocument(state.firebaseUser.uid, state.activePlanId, 'topics', id)
-          ).catch(console.error);
+          import('./lib/db').then(async ({ deletePlanDocument }) => {
+            const uid = state.firebaseUser.uid;
+            const pid = state.activePlanId;
+            await deletePlanDocument(uid, pid, 'topics', id);
+            const relatedActivities = state.v2Activities.filter(a => a.topicId === id);
+            for (const a of relatedActivities) {
+              await deletePlanDocument(uid, pid, 'activities', a.id);
+            }
+          }).catch(console.error);
         }
-        return { v2Topics };
+        return { v2Topics, v2Activities, cycleQueue };
       }),
       addV2Activity: (activity) => set(state => {
         const v2Activities = [...state.v2Activities, activity];

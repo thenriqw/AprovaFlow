@@ -53,7 +53,7 @@ export default function Today() {
           ...nextTask,
           activityId: recommendedActivity.id,
           activityType: recommendedActivity.type as any,
-          source: recommendedActivity.title,
+          source: recommendedActivity.source,
           expectedDurationSeconds: recommendedActivity.expectedDurationSeconds
         });
       } else {
