@@ -56,10 +56,13 @@ export async function extractTextFromFile(file: File): Promise<{ content: string
 
 export function parseSpreadsheetDeterministically(content: string, filename: string) {
   const subjectsMap: Record<string, any> = {};
+  let recognizedAny = false;
   
   // Split by sheets
   const sheets = content.split(/--- Aba: .*? ---\n/).filter(s => s.trim().length > 0);
   
+  const normalizeStr = (s: string) => s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
   for (const sheetData of sheets) {
     const lines = sheetData.split('\n').filter(l => l.trim().length > 0);
     if (lines.length === 0) continue;
@@ -87,28 +90,51 @@ export function parseSpreadsheetDeterministically(content: string, filename: str
       return result.map(s => s.trim());
     };
     
-    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
+    const headers = parseCSVLine(lines[0]);
+    const normHeaders = headers.map(normalizeStr);
     
     // Find column indices
-    let subjectIdx = headers.findIndex(h => h.includes('matéria') || h.includes('materia') || h.includes('disciplina'));
-    let topicIdx = headers.findIndex(h => h.includes('assunto') || h.includes('tópico') || h.includes('topico'));
-    let activityIdx = headers.findIndex(h => h.includes('atividade') || h.includes('tipo'));
+    const subjectIdx = normHeaders.findIndex(h => h === 'materia' || h === 'disciplina');
+    const topicIdx = normHeaders.findIndex(h => h === 'assunto' || h === 'topico');
+    const activityIdx = normHeaders.findIndex(h => h === 'atividade' || h === 'tipo');
+    const durationIdx = normHeaders.findIndex(h => h === 'duracao' || h === 'tempo');
+    const sourceIdx = normHeaders.findIndex(h => h === 'fonte' || h === 'source');
     
-    // Default to first few columns if not found
-    if (subjectIdx === -1) subjectIdx = 0;
-    if (topicIdx === -1) topicIdx = headers.length > 1 ? 1 : -1;
+    if (subjectIdx === -1 || topicIdx === -1) {
+      continue; // Skip this sheet if structure not recognized
+    }
+    
+    recognizedAny = true;
     
     for (let i = 1; i < lines.length; i++) {
       const row = parseCSVLine(lines[i]);
       if (row.length <= subjectIdx || !row[subjectIdx]) continue;
       
       const subjectName = row[subjectIdx];
-      const topicName = topicIdx !== -1 && row.length > topicIdx ? row[topicIdx] : 'Geral';
+      const topicName = row.length > topicIdx && row[topicIdx] ? row[topicIdx] : undefined;
+      if (!topicName) continue;
       
-      let activityType = 'Estudo livre';
-      let title = topicName;
-      if (activityIdx !== -1 && row.length > activityIdx) {
-         activityType = row[activityIdx];
+      let title = undefined;
+      let activityType = undefined;
+      
+      if (activityIdx !== -1 && row.length > activityIdx && row[activityIdx]) {
+         const val = row[activityIdx].trim();
+         const normVal = normalizeStr(val);
+         const allowedTypes = ['Videoaula', 'Leitura', 'Questões', 'Revisão', 'Simulado', 'Redação', 'Aula presencial', 'Flashcards'];
+         const matchedType = allowedTypes.find(t => normalizeStr(t) === normVal);
+         activityType = matchedType || 'Outro';
+         title = val;
+      }
+      
+      let durationSeconds = undefined;
+      if (durationIdx !== -1 && row.length > durationIdx && row[durationIdx]) {
+         const mins = parseInt(row[durationIdx].replace(/[^0-9]/g, ''), 10);
+         if (!isNaN(mins)) durationSeconds = mins * 60;
+      }
+      
+      let sourceStr = undefined;
+      if (sourceIdx !== -1 && row.length > sourceIdx && row[sourceIdx]) {
+         sourceStr = row[sourceIdx].trim();
       }
       
       if (!subjectsMap[subjectName]) {
@@ -118,24 +144,32 @@ export function parseSpreadsheetDeterministically(content: string, filename: str
         subjectsMap[subjectName].topicsMap[topicName] = { name: topicName, activities: [] };
       }
       
-      subjectsMap[subjectName].topicsMap[topicName].activities.push({
-        title,
-        type: activityType,
-        expectedDurationSeconds: 3600
-      });
+      if (title && activityType) {
+        subjectsMap[subjectName].topicsMap[topicName].activities.push({
+          title,
+          type: activityType,
+          expectedDurationSeconds: durationSeconds,
+          source: sourceStr
+        });
+      }
     }
   }
   
+  if (!recognizedAny) return null; // Let it fallback to Gemini
+  
   const subjects = Object.values(subjectsMap).map(sub => ({
     name: sub.name,
-    topics: Object.values(sub.topicsMap)
+    topics: Object.values(sub.topicsMap).map((t: any) => ({
+      name: t.name,
+      activities: t.activities
+    }))
   }));
   
   return {
     title: filename,
     detectedType: 'spreadsheet',
     subjects,
-    warnings: subjects.length === 0 ? ['Nenhum dado válido encontrado na planilha. Verifique as colunas.'] : []
+    warnings: []
   };
 }
 
@@ -151,7 +185,6 @@ export async function parseWithGemini(content: string, detectedType: string, fil
     throw new Error(data.message || 'Falha na IA');
   }
   
-  // Post-response validation (Item 15)
   const proposal = data.proposal;
   if (!proposal || typeof proposal !== 'object') {
     throw new Error('A resposta da IA não é um objeto JSON válido.');
@@ -161,18 +194,25 @@ export async function parseWithGemini(content: string, detectedType: string, fil
     throw new Error('A estrutura de disciplinas (subjects) retornada é inválida.');
   }
   
+  // Post-response validation without inventing data
+  proposal.subjects = proposal.subjects.filter((subject: any) => subject && subject.name && typeof subject.name === 'string' && subject.name.trim().length > 0);
+  
   proposal.subjects.forEach((subject: any) => {
-    if (!subject.name) subject.name = 'Disciplina Desconhecida';
     if (!Array.isArray(subject.topics)) subject.topics = [];
     
+    subject.topics = subject.topics.filter((topic: any) => topic && topic.name && typeof topic.name === 'string' && topic.name.trim().length > 0);
+    
     subject.topics.forEach((topic: any) => {
-      if (!topic.name) topic.name = 'Tópico Geral';
       if (!Array.isArray(topic.activities)) topic.activities = [];
       
-      topic.activities.forEach((activity: any) => {
-        if (!activity.title) activity.title = 'Estudo';
-        if (!activity.type) activity.type = 'Estudo livre';
-        if (!activity.expectedDurationSeconds) activity.expectedDurationSeconds = 3600;
+      // Preserve only valid activities
+      topic.activities = topic.activities.filter((act: any) => act && act.title && typeof act.title === 'string' && act.title.trim().length > 0).map((act: any) => {
+        const out: any = { title: act.title };
+        if (act.type) out.type = act.type;
+        if (act.expectedDurationSeconds && typeof act.expectedDurationSeconds === 'number') out.expectedDurationSeconds = act.expectedDurationSeconds;
+        if (act.source) out.source = act.source;
+        if (act.expectedQuestions && typeof act.expectedQuestions === 'number') out.expectedQuestions = act.expectedQuestions;
+        return out;
       });
     });
   });

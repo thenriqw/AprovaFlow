@@ -41,21 +41,12 @@ export default function Inbox() {
       setError('');
       
       const ext = file.name.split('.').pop()?.toLowerCase() || 'text';
-      let sourceType: 'pdf' | 'docx' | 'xlsx' | 'csv' | 'text' = 'text';
-      if (['pdf', 'docx', 'xlsx', 'csv'].includes(ext)) {
+      let sourceType: 'pdf' | 'docx' | 'xlsx' | 'csv' | 'text' | 'txt' = 'text';
+      if (['pdf', 'docx', 'xlsx', 'csv', 'txt'].includes(ext)) {
         sourceType = ext as any;
       }
       
-      // 1. Create Job
-      const job = await createImportJob(firebaseUser.uid, {
-        title: file.name,
-        filename: file.name,
-        sourceType,
-        status: 'extracting'
-      });
-      currentJobId = job.id;
-
-      // 2. Extract Text
+      // 2. Extract Text FIRST so we can hash before job creation
       const { content, detectedType } = await extractTextFromFile(file);
       
       const contentHash = await generateHash(content);
@@ -63,22 +54,36 @@ export default function Inbox() {
       // Check for duplicates
       const isDuplicate = imports.some(i => i.contentHash === contentHash && i.status !== 'failed');
       if (isDuplicate) {
-        throw new Error('Este arquivo já foi importado (mesmo conteúdo).');
+        if (!window.confirm('Este arquivo parece já ter sido importado. Deseja importar novamente?')) {
+          setIsProcessing(false);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          return;
+        }
       }
-      
-      // 3. Update Job
-      await updateImportJob(job.id, { status: 'processing', contentHash });
+
+      // 1. Create Job
+      const job = await createImportJob(firebaseUser.uid, {
+        title: file.name,
+        filename: file.name,
+        sourceType: sourceType as any,
+        status: 'processing',
+        contentHash
+      });
+      currentJobId = job.id;
 
       // 4. Parse with AI or Local Parser
       let proposal;
       if (['csv', 'xlsx'].includes(detectedType)) {
         proposal = parseSpreadsheetDeterministically(content, file.name);
+        if (!proposal) {
+          proposal = await parseWithGemini(content, detectedType, file.name);
+        }
       } else {
         proposal = await parseWithGemini(content, detectedType, file.name);
       }
 
       // 5. Update Job with Proposal
-      await updateImportJob(job.id, { 
+      await updateImportJob(firebaseUser.uid, job.id, { 
         status: 'needs_review',
         proposal,
         warnings: proposal.warnings || []
@@ -90,7 +95,7 @@ export default function Inbox() {
       setError(msg);
       if (currentJobId) {
         try {
-          await updateImportJob(currentJobId, { status: 'failed', error: msg });
+          await updateImportJob(firebaseUser.uid, currentJobId, { status: 'failed', error: msg });
         } catch (updateErr) {
           console.error("Failed to update job status to failed", updateErr);
         }
@@ -115,24 +120,26 @@ export default function Inbox() {
       setIsProcessing(true);
       setError('');
       
-      const job = await createImportJob(firebaseUser.uid, {
-        title: 'Texto Colado',
-        sourceType: 'text',
-        status: 'processing'
-      });
-      currentJobId = job.id;
-
       const contentHash = await generateHash(textInput);
       const isDuplicate = imports.some(i => i.contentHash === contentHash && i.status !== 'failed');
       if (isDuplicate) {
-        throw new Error('Este texto já foi importado (mesmo conteúdo).');
+        if (!window.confirm('Este texto parece já ter sido importado. Deseja importar novamente?')) {
+          setIsProcessing(false);
+          return;
+        }
       }
 
-      await updateImportJob(job.id, { contentHash });
+      const job = await createImportJob(firebaseUser.uid, {
+        title: 'Texto Colado',
+        sourceType: 'text',
+        status: 'processing',
+        contentHash
+      });
+      currentJobId = job.id;
 
       const proposal = await parseWithGemini(textInput, 'text', 'texto-colado.txt');
 
-      await updateImportJob(job.id, { 
+      await updateImportJob(firebaseUser.uid, job.id, { 
         status: 'needs_review',
         proposal,
         warnings: proposal.warnings || []
@@ -144,7 +151,7 @@ export default function Inbox() {
       setError(err.message);
       if (currentJobId) {
         try {
-          await updateImportJob(currentJobId, { status: 'failed', error: err.message });
+          await updateImportJob(firebaseUser.uid, currentJobId, { status: 'failed', error: err.message });
         } catch (updateErr) {
           console.error("Failed to update job status to failed", updateErr);
         }

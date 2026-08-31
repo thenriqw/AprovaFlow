@@ -5,7 +5,7 @@ import { applyImportProposal } from '../lib/applyService';
 import { useStore } from '../store';
 
 export default function ReviewDialog({ job, onClose }: { job: ImportJob, onClose: () => void }) {
-  const { activePlanId, v2Subjects, v2Topics, firebaseUser, syncCycleWithSubjects, recalculateRoute } = useStore();
+  const { activePlanId, plans, v2Subjects, v2Topics, firebaseUser, refreshActivePlanData } = useStore();
   const [proposal, setProposal] = useState<any>(null);
   
   // Selection state (true = selected)
@@ -65,8 +65,7 @@ export default function ReviewDialog({ job, onClose }: { job: ImportJob, onClose
       await applyImportProposal(firebaseUser.uid, activePlanId, filteredJob, v2Subjects, v2Topics);
       
       // Item 14: Refresh state
-      syncCycleWithSubjects();
-      recalculateRoute();
+      await refreshActivePlanData();
       onClose();
     } catch (err: any) {
       setError(err.message);
@@ -122,20 +121,32 @@ export default function ReviewDialog({ job, onClose }: { job: ImportJob, onClose
   let mergeSubjectsCount = 0;
   let newTopicsCount = 0;
   let mergeTopicsCount = 0;
+  let activitiesCount = 0;
+  let ignoredCount = 0;
   
   proposal.subjects.forEach((s: any, sIdx: number) => {
-    if (!selectedSubjects[sIdx]) return;
+    if (!selectedSubjects[sIdx]) {
+      ignoredCount++;
+      return;
+    }
     const existingSub = v2Subjects.find(sub => normalizeStr(sub.name) === normalizeStr(s.name));
     if (existingSub) mergeSubjectsCount++;
     else newSubjectsCount++;
     
     s.topics.forEach((t: any, tIdx: number) => {
-      if (!selectedTopics[sIdx][tIdx]) return;
+      if (!selectedTopics[sIdx][tIdx]) {
+        ignoredCount++;
+        return;
+      }
       const existingTop = existingSub && v2Topics.find(top => top.subjectId === existingSub.id && normalizeStr(top.name) === normalizeStr(t.name));
       if (existingTop) mergeTopicsCount++;
       else newTopicsCount++;
+      
+      activitiesCount += (t.activities || []).length;
     });
   });
+
+  const activePlanName = plans.find(p => p.id === activePlanId)?.name || 'Plano Atual';
 
   return (
     <div className="fixed inset-0 bg-neutral-900/50 flex items-center justify-center p-4 z-50">
@@ -275,6 +286,11 @@ export default function ReviewDialog({ job, onClose }: { job: ImportJob, onClose
                
                <div className="space-y-4 text-sm">
                  <div>
+                   <div className="text-neutral-500 mb-1">Destino</div>
+                   <div className="font-medium text-neutral-800">{activePlanName}</div>
+                 </div>
+
+                 <div>
                    <div className="text-neutral-500 mb-1">Matérias (Disciplinas)</div>
                    <div className="flex justify-between font-medium">
                      <span className="text-emerald-600">+{newSubjectsCount} novas</span>
@@ -289,6 +305,18 @@ export default function ReviewDialog({ job, onClose }: { job: ImportJob, onClose
                      <span className="text-amber-600">{mergeTopicsCount} mesclados</span>
                    </div>
                  </div>
+
+                 <div>
+                   <div className="text-neutral-500 mb-1">Atividades</div>
+                   <div className="font-medium text-indigo-600">+{activitiesCount} adicionadas</div>
+                 </div>
+
+                 {ignoredCount > 0 && (
+                   <div>
+                     <div className="text-neutral-500 mb-1">Ignorados</div>
+                     <div className="font-medium text-neutral-400">{ignoredCount} itens desmarcados</div>
+                   </div>
+                 )}
 
                  <div className="pt-4 border-t border-neutral-100 text-xs text-neutral-500">
                    As matérias marcadas como "Mesclar" serão integradas ao seu plano atual sem duplicar conteúdos existentes.

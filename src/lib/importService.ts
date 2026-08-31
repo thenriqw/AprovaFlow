@@ -45,8 +45,14 @@ export function subscribeToImportJobs(userId: string, onUpdate: (jobs: ImportJob
 
   return onSnapshot(importsQuery, (snapshot) => {
     const jobs: ImportJob[] = [];
-    snapshot.forEach((doc) => {
-      jobs.push({ id: doc.id, ...doc.data() } as ImportJob);
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      jobs.push({ 
+        id: docSnap.id, 
+        ...data,
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt,
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt
+      } as ImportJob);
     });
     onUpdate(jobs);
   });

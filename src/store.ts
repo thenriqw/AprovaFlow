@@ -118,6 +118,7 @@ interface AppState {
   setCycleQueue: (queue: CycleItem[]) => void;
   recalculateRoute: () => void;
   syncCycleWithSubjects: () => void;
+  refreshActivePlanData: () => Promise<void>;
   addV2Subject: (subject: Subject) => void;
   updateV2Subject: (subject: Subject) => void;
   deleteV2Subject: (id: string) => void;
@@ -461,7 +462,60 @@ createPlan: async (planData) => {
           throw error;
         }
       },
-addSession: (session) => set((state) => {
+      refreshActivePlanData: async () => {
+        const state = get();
+        if (!state.firebaseUser || !state.activePlanId) return;
+        
+        try {
+          const { loadPlanData } = await import('./lib/db');
+          const planFullData = await loadPlanData(state.firebaseUser.uid, state.activePlanId);
+          const activePlan = state.plans.find(p => p.id === state.activePlanId);
+          
+          const bridgedProfile = activePlan ? {
+            objective: activePlan.objective, examName: "",
+            examDate: activePlan.examDate,
+            availableTimePerDay: activePlan.availableTimePerDay,
+            subjects: planFullData.subjects.map(s => ({
+              id: s.id,
+              name: s.name,
+              difficulty: (s.difficulty >= 4 ? 'high' : (s.difficulty >= 3 ? 'medium' : 'low')) as 'high' | 'medium' | 'low',
+              importance: s.importance,
+              isArchived: s.isArchived,
+              topics: planFullData.topics.filter(t => t.subjectId === s.id).map(t => ({ id: t.id, name: t.name }))
+            }))
+          } : null;
+
+          set({
+            v2Subjects: planFullData.subjects,
+            v2Topics: planFullData.topics,
+            v2Activities: planFullData.activities,
+            sessions: planFullData.sessions.map((s: any) => ({
+              id: s.id,
+              subjectId: s.subjectId,
+              topicId: s.topicId,
+              activityId: s.activityId,
+              subject: planFullData.subjects.find(sub => sub.id === s.subjectId)?.name || '',
+              topic: planFullData.topics.find(t => t.id === s.topicId)?.name || '',
+              activityType: s.activityType,
+              source: s.source,
+              durationSeconds: s.durationSeconds,
+              questionsTotal: s.questionsTotal || 0,
+              questionsCorrect: s.questionsCorrect || 0,
+              errorReason: s.errorReason || '',
+              date: s.date
+            })),
+            ...(bridgedProfile ? { userProfile: bridgedProfile } : {}),
+            cycleQueue: [] // Clear so syncCycle can rebuild it
+          });
+          
+          // Rebuild everything using fresh state
+          get().syncCycleWithSubjects();
+          get().recalculateRoute();
+        } catch (error) {
+          console.error("Failed to refresh plan data:", error);
+        }
+      },
+      addSession: (session) => set((state) => {
         const newSession = { ...session, id: crypto.randomUUID(), date: new Date().toISOString() };
         let newActivities = state.v2Activities || [];
         if (session.activityId) {

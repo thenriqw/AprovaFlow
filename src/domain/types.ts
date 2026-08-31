@@ -136,7 +136,7 @@ export interface ImportJob {
   planId?: string;
   filename?: string;
   title: string;
-  sourceType: 'text' | 'pdf' | 'docx' | 'xlsx' | 'csv' | 'catalog';
+  sourceType: 'text' | 'pdf' | 'docx' | 'xlsx' | 'csv' | 'txt' | 'catalog';
   status: 'queued' | 'extracting' | 'processing' | 'needs_review' | 'applying' | 'applied' | 'ignored' | 'failed' | 'partial';
   contentHash?: string;
   proposal?: {

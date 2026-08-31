@@ -1,4 +1,4 @@
-import { writeBatch, doc, collection, getDoc } from 'firebase/firestore';
+import { writeBatch, doc, collection, getDoc, runTransaction } from 'firebase/firestore';
 import { db } from './firebase';
 import { ImportJob, Subject, Topic, StudyActivity, ActivityType } from '../domain/types';
 import { updateImportJob } from './importService';
@@ -24,12 +24,14 @@ export async function applyImportProposal(
   // Idempotency: Lock the job by setting it to 'applying'
   // Verify it hasn't been started yet
   const jobRef = doc(db, 'users', userId, 'imports', importJob.id);
-  const jobSnap = await getDoc(jobRef);
-  if (!jobSnap.exists() || jobSnap.data().status !== 'needs_review') {
-    throw new Error('Importação já processada ou em andamento.');
-  }
   
-  await updateImportJob(userId, importJob.id, { status: 'applying' });
+  await runTransaction(db, async (transaction) => {
+    const jobSnap = await transaction.get(jobRef);
+    if (!jobSnap.exists() || jobSnap.data().status !== 'needs_review') {
+      throw new Error('Importação já processada ou em andamento.');
+    }
+    transaction.update(jobRef, { status: 'applying', updatedAt: new Date().toISOString() });
+  });
 
   const subjectsRef = collection(db, 'users', userId, 'plans', planId, 'subjects');
   const topicsRef = collection(db, 'users', userId, 'plans', planId, 'topics');
@@ -60,6 +62,10 @@ export async function applyImportProposal(
       commitBatchAndReset();
     }
   };
+  
+  // Working arrays to prevent mutations of original state
+  const workingSubjects = [...existingSubjects];
+  const workingTopics = [...existingTopics];
 
   try {
     for (const subjectProp of importJob.proposal.subjects) {
@@ -70,7 +76,7 @@ export async function applyImportProposal(
       // Conflict detection
       let subjectId = '';
       const normPropSubject = normalizeStr(subjectProp.name);
-      const existingSub = existingSubjects.find(s => normalizeStr(s.name) === normPropSubject);
+      const existingSub = workingSubjects.find(s => normalizeStr(s.name) === normPropSubject);
       
       if (existingSub) {
         subjectId = existingSub.id;
@@ -88,8 +94,8 @@ export async function applyImportProposal(
         });
         subjectsAdded++;
         
-        // Temporarily add to existingSubjects array to prevent duplicate subjects in the same import chunk
-        existingSubjects.push({ id: subjectId, planId, name: subjectProp.name, importance: 3, difficulty: 3, createdAt: now, updatedAt: now });
+        // Add to working array to prevent duplicate subjects in the same import chunk
+        workingSubjects.push({ id: subjectId, planId, name: subjectProp.name, importance: 3, difficulty: 3, createdAt: now, updatedAt: now });
       }
 
       for (const topicProp of subjectProp.topics) {
@@ -99,7 +105,7 @@ export async function applyImportProposal(
 
         let topicId = '';
         const normPropTopic = normalizeStr(topicProp.name);
-        const existingTop = existingTopics.find(t => t.subjectId === subjectId && normalizeStr(t.name) === normPropTopic);
+        const existingTop = workingTopics.find(t => t.subjectId === subjectId && normalizeStr(t.name) === normPropTopic);
         
         if (existingTop) {
           topicId = existingTop.id;
@@ -116,7 +122,7 @@ export async function applyImportProposal(
           });
           topicsAdded++;
           
-          existingTopics.push({ id: topicId, planId, subjectId, name: topicProp.name, createdAt: now, updatedAt: now });
+          workingTopics.push({ id: topicId, planId, subjectId, name: topicProp.name, createdAt: now, updatedAt: now });
         }
 
         for (const actProp of topicProp.activities) {
