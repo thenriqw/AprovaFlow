@@ -3,7 +3,7 @@ import { seedEnemQa, removeEnemQaSeed, getEnemQaSeedSummary } from '../qa/enemSe
 import { useStore } from '../store';
 
 export default function QaToolsPanel() {
-  const { firebaseUser, switchPlan } = useStore();
+  const { firebaseUser, switchPlan, plans, activePlanId, cycleQueue, v2Subjects, v2Topics } = useStore();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
 
@@ -30,7 +30,10 @@ export default function QaToolsPanel() {
     try {
       const res = await removeEnemQaSeed(firebaseUser.uid);
       setResult(res);
-      await switchPlan('');
+      if (res.removedPlanIds && res.removedPlanIds.includes(activePlanId)) {
+        const fallback = plans.find(p => !res.removedPlanIds.includes(p.id));
+        await switchPlan(fallback ? fallback.id : '');
+      }
     } catch (e: any) {
       setResult({ error: e.message });
     }
@@ -42,6 +45,20 @@ export default function QaToolsPanel() {
     setResult('Buscando resumo...');
     try {
       const res = await getEnemQaSeedSummary(firebaseUser.uid);
+      if (res && res.planId === activePlanId) {
+        const nextItem = cycleQueue.find(q => q.status === 'next');
+        if (nextItem) {
+          (res as any).todayRecommendation = {
+            subject: v2Subjects.find(s => s.id === nextItem.subjectId)?.name || nextItem.subjectId,
+            topic: v2Topics.find(t => t.id === nextItem.topicId)?.name || nextItem.topicId,
+            activityId: nextItem.activityId,
+            activityType: nextItem.activityType,
+            expectedDurationSeconds: nextItem.expectedDurationSeconds,
+            recommendationReasons: nextItem.recommendationReasons,
+            score: (nextItem as any).score
+          };
+        }
+      }
       setResult(res || { message: 'Seed não encontrado.' });
     } catch (e: any) {
       setResult({ error: e.message });
@@ -50,10 +67,10 @@ export default function QaToolsPanel() {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 bg-white border-2 border-indigo-500 rounded-lg p-4 shadow-2xl max-w-sm w-full">
-      <h3 className="font-bold text-indigo-700 mb-2">QA Tools: ENEM Realista</h3>
+    <div className="fixed bottom-4 right-4 z-50 bg-white border-2 border-indigo-500 rounded-lg p-4 shadow-2xl max-w-sm w-full max-h-[80vh] flex flex-col">
+      <h3 className="font-bold text-indigo-700 mb-2 shrink-0">QA Tools: ENEM Realista</h3>
       
-      <div className="flex flex-col gap-2 mb-4">
+      <div className="flex flex-col gap-2 mb-4 shrink-0">
         <button 
           onClick={handleCreate} 
           disabled={loading}
@@ -78,7 +95,7 @@ export default function QaToolsPanel() {
       </div>
 
       {result && (
-        <div className="bg-neutral-900 text-emerald-400 p-2 rounded text-xs font-mono overflow-auto max-h-48 whitespace-pre-wrap">
+        <div className="bg-neutral-900 text-emerald-400 p-2 rounded text-xs font-mono overflow-auto whitespace-pre-wrap flex-1 min-h-0">
           {typeof result === 'string' ? result : JSON.stringify(result, null, 2)}
         </div>
       )}
