@@ -86,7 +86,10 @@ interface ActiveTaskInfo {
   expectedDurationSeconds?: number;
 }
 
+import { ImportJob } from './domain/types';
+
 interface AppState {
+  imports: ImportJob[];
   firebaseUser: FirebaseUser | null;
   authReady: boolean;
   dbLoaded: boolean;
@@ -293,6 +296,7 @@ export const useStore = create<AppState>()(
       authReady: false,
       dbLoaded: false,
       isSyncingFromDb: false,
+      imports: [],
       setFirebaseUser: (user) => set({ firebaseUser: user }),
       setAuthReady: (authReady) => set({ authReady }),
       setSyncingFromDb: (val) => set({ isSyncingFromDb: val }),
