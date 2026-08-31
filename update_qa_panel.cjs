@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+const fs = require('fs');
+const content = `import React, { useState } from 'react';
 import { seedEnemQa, removeEnemQaSeed, getEnemQaSeedSummary } from '../qa/enemSeed';
 import { useStore } from '../store';
 import { getPlans } from '../lib/db';
@@ -131,3 +132,5 @@ export default function QaToolsPanel() {
     </div>
   );
 }
+`;
+fs.writeFileSync('src/components/QaToolsPanel.tsx', content);

@@ -1,4 +1,5 @@
-import { writeBatch, collection, doc, getDocs, query, where } from 'firebase/firestore';
+const fs = require('fs');
+const content = `import { writeBatch, collection, doc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 const DATA = {
@@ -185,22 +186,22 @@ export async function seedEnemQa(uid: string) {
   const preview = buildEnemQaDatasetPreview();
 
   if (preview.activitiesCount < 90 || preview.activitiesCount > 130) {
-    throw new Error(`QA Constraint Failed: activitiesCount is ${preview.activitiesCount}`);
+    throw new Error(\`QA Constraint Failed: activitiesCount is \${preview.activitiesCount}\`);
   }
   if (preview.sessionsCount < 130 || preview.sessionsCount > 160) {
-    throw new Error(`QA Constraint Failed: sessionsCount is ${preview.sessionsCount}`);
+    throw new Error(\`QA Constraint Failed: sessionsCount is \${preview.sessionsCount}\`);
   }
   if (preview.firstSessionDate < '2026-06-01') {
-    throw new Error(`QA Constraint Failed: firstSessionDate is ${preview.firstSessionDate}`);
+    throw new Error(\`QA Constraint Failed: firstSessionDate is \${preview.firstSessionDate}\`);
   }
   if (preview.lastSessionDate > '2026-08-30') {
-    throw new Error(`QA Constraint Failed: lastSessionDate is ${preview.lastSessionDate}`);
+    throw new Error(\`QA Constraint Failed: lastSessionDate is \${preview.lastSessionDate}\`);
   }
   if (preview.redacaoSessions < 5 || preview.redacaoSessions > 7) {
-    throw new Error(`QA Constraint Failed: redacaoSessions is ${preview.redacaoSessions}`);
+    throw new Error(\`QA Constraint Failed: redacaoSessions is \${preview.redacaoSessions}\`);
   }
   if (preview.averageWeeklyHours < 14 || preview.averageWeeklyHours > 17) {
-    throw new Error(`QA Constraint Failed: averageWeeklyHours is ${preview.averageWeeklyHours}`);
+    throw new Error(\`QA Constraint Failed: averageWeeklyHours is \${preview.averageWeeklyHours}\`);
   }
 
   const plansRef = collection(db, 'users', uid, 'plans');
@@ -279,7 +280,7 @@ export async function seedEnemQa(uid: string) {
 
     for (const t of s.topics) {
       const tRef = doc(collection(db, 'users', uid, 'plans', planId, 'topics'));
-      topicsMap[`${s.name}::${t}`] = tRef.id;
+      topicsMap[\`\${s.name}::\${t}\`] = tRef.id;
       batch.set(tRef, {
         id: tRef.id,
         name: t,
@@ -320,10 +321,10 @@ export async function seedEnemQa(uid: string) {
         
         const actData: any = {
           id: actRef.id,
-          title: `${aType} — ${t}`,
+          title: \`\${aType} — \${t}\`,
           planId,
           subjectId: subjectsMap[s.name],
-          topicId: topicsMap[`${s.name}::${t}`],
+          topicId: topicsMap[\`\${s.name}::\${t}\`],
           type: aType,
           status,
           expectedDurationSeconds: expDur,
@@ -415,7 +416,7 @@ export async function seedEnemQa(uid: string) {
         sessData.topicId = linkedAct.topicId;
       } else {
         const fallbackTopic = randomChoice(subConfig.topics);
-        sessData.topicId = topicsMap[`${subName}::${fallbackTopic}`];
+        sessData.topicId = topicsMap[\`\${subName}::\${fallbackTopic}\`];
       }
 
       if (isQuestions) {
@@ -574,7 +575,7 @@ export async function getEnemQaSeedSummary(uid: string) {
 
   const accuracyBySubject: Record<string, string> = {};
   for (const [sub, data] of Object.entries(accMap)) {
-    accuracyBySubject[sub] = `${Math.round((data.correct / data.total) * 100)}%`;
+    accuracyBySubject[sub] = \`\${Math.round((data.correct / data.total) * 100)}%\`;
   }
 
   return {
@@ -599,3 +600,5 @@ export async function getEnemQaSeedSummary(uid: string) {
     currentDemandSeconds: activities.filter(a => a.status === 'pending').reduce((acc, a) => acc + (a.expectedDurationSeconds || 0), 0)
   };
 }
+`;
+fs.writeFileSync('src/qa/enemSeed.ts', content);
