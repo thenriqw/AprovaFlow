@@ -95,6 +95,7 @@ interface AppState {
   authReady: boolean;
   dbLoaded: boolean;
   isSyncingFromDb: boolean;
+  isQaVisualMode?: boolean;
   setFirebaseUser: (user: FirebaseUser | null) => void;
   setAuthReady: (authReady: boolean) => void;
   loadFromDb: (data: any) => void;
@@ -298,6 +299,7 @@ export const useStore = create<AppState>()(
       authReady: false,
       dbLoaded: false,
       isSyncingFromDb: false,
+  isQaVisualMode: false,
       imports: [],
       setImports: (imports) => set({ imports }),
       setFirebaseUser: (user) => set({ firebaseUser: user }),

@@ -39,3 +39,14 @@ jobs:
           name: efederal-build
           path: dist/
           retention-days: 7
+
+      - name: Build QA Visual application
+        run: VITE_QA_VISUAL=true npm run build
+
+      - name: Upload QA Visual build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: efederal-qa-visual
+          path: dist/
+          retention-days: 7

@@ -1,3 +1,4 @@
+import { isQaVisualEnabled } from '../qa/qaVisualAdapter';
 import { doc, getDoc, setDoc, collection, getDocs, writeBatch, deleteDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Plan, Subject, Topic, StudySession, StudyActivity, Resource } from '../domain/types';
@@ -16,6 +17,7 @@ export const getUserConfig = async (uid: string) => {
 };
 
 export const saveUserConfig = async (uid: string, data: any) => {
+  if (isQaVisualEnabled()) return;
   const userRef = doc(db, 'users', uid);
   await setDoc(userRef, data, { merge: true });
 };
@@ -29,11 +31,13 @@ export const getPlanCollection = async <T>(uid: string, planId: string, colName:
 
 // Generic saver for a plan's subcollection document
 export const savePlanDocument = async <T extends { id: string }>(uid: string, planId: string, colName: string, item: T) => {
+  if (isQaVisualEnabled()) return;
   const ref = doc(db, 'users', uid, 'plans', planId, colName, item.id);
   await setDoc(ref, item);
 };
 
 export const deletePlanDocument = async (uid: string, planId: string, colName: string, id: string) => {
+  if (isQaVisualEnabled()) return;
   const ref = doc(db, 'users', uid, 'plans', planId, colName, id);
   await deleteDoc(ref);
 };
@@ -58,6 +62,7 @@ export const getPlans = async (uid: string): Promise<Plan[]> => {
 };
 
 export const savePlan = async (uid: string, plan: Plan) => {
+  if (isQaVisualEnabled()) return;
   const ref = doc(db, 'users', uid, 'plans', plan.id);
   await setDoc(ref, plan);
 };
@@ -89,11 +94,13 @@ export const getLegacyUserData = async (uid: string) => {
 };
 
 export const saveLegacyUserBaseData = async (uid: string, data: any) => {
+  if (isQaVisualEnabled()) return;
   const userRef = doc(db, 'users', uid);
   await setDoc(userRef, data, { merge: true });
 };
 
 export const saveLegacySessionToDb = async (uid: string, session: any) => {
+  if (isQaVisualEnabled()) return;
   const sessionRef = doc(db, 'users', uid, 'sessions', session.id);
   await setDoc(sessionRef, session);
 };

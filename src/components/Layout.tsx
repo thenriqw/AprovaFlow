@@ -1,3 +1,4 @@
+import { isQaVisualEnabled } from '../qa/qaVisualAdapter';
 import React, { useState } from 'react';
 import { cn } from '../lib/utils';
 import { 
@@ -45,6 +46,11 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
         <div className="p-6">
           <div className="flex items-center gap-2 mb-8">
             <span className="font-serif font-semibold text-2xl tracking-tight text-neutral-900">{APP_NAME}</span>
+            {isQaVisualEnabled() && (
+              <span className="ml-2 px-1.5 py-0.5 bg-yellow-400 text-yellow-900 text-[10px] font-bold rounded uppercase tracking-wider">
+                QA Visual
+              </span>
+            )}
           </div>
           
           {/* Plan Selector */}
@@ -148,7 +154,14 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
         
         {/* Mobile Header */}
         <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-neutral-200 sticky top-0 z-30">
-          <span className="font-serif font-semibold text-lg tracking-tight text-neutral-900">{APP_NAME}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-serif font-semibold text-lg tracking-tight text-neutral-900">{APP_NAME}</span>
+            {isQaVisualEnabled() && (
+              <span className="px-1.5 py-0.5 bg-yellow-400 text-yellow-900 text-[10px] font-bold rounded uppercase tracking-wider">
+                QA Visual
+              </span>
+            )}
+          </div>
           
           <div className="relative">
             <button 
