@@ -16,10 +16,13 @@ export const getUserConfig = async (uid: string) => {
   return snap.exists() ? snap.data() : null;
 };
 
+
+const sanitizeForFirestore = (data: any) => JSON.parse(JSON.stringify(data));
+
 export const saveUserConfig = async (uid: string, data: any) => {
   if (isQaVisualEnabled()) return;
   const userRef = doc(db, 'users', uid);
-  await setDoc(userRef, data, { merge: true });
+  await setDoc(userRef, sanitizeForFirestore(data), { merge: true });
 };
 
 // Generic fetcher for a plan's subcollection
@@ -33,7 +36,7 @@ export const getPlanCollection = async <T>(uid: string, planId: string, colName:
 export const savePlanDocument = async <T extends { id: string }>(uid: string, planId: string, colName: string, item: T) => {
   if (isQaVisualEnabled()) return;
   const ref = doc(db, 'users', uid, 'plans', planId, colName, item.id);
-  await setDoc(ref, item);
+  await setDoc(ref, sanitizeForFirestore(item));
 };
 
 export const deletePlanDocument = async (uid: string, planId: string, colName: string, id: string) => {
@@ -64,7 +67,7 @@ export const getPlans = async (uid: string): Promise<Plan[]> => {
 export const savePlan = async (uid: string, plan: Plan) => {
   if (isQaVisualEnabled()) return;
   const ref = doc(db, 'users', uid, 'plans', plan.id);
-  await setDoc(ref, plan);
+  await setDoc(ref, sanitizeForFirestore(plan));
 };
 
 
@@ -96,13 +99,13 @@ export const getLegacyUserData = async (uid: string) => {
 export const saveLegacyUserBaseData = async (uid: string, data: any) => {
   if (isQaVisualEnabled()) return;
   const userRef = doc(db, 'users', uid);
-  await setDoc(userRef, data, { merge: true });
+  await setDoc(userRef, sanitizeForFirestore(data), { merge: true });
 };
 
 export const saveLegacySessionToDb = async (uid: string, session: any) => {
   if (isQaVisualEnabled()) return;
   const sessionRef = doc(db, 'users', uid, 'sessions', session.id);
-  await setDoc(sessionRef, session);
+  await setDoc(sessionRef, sanitizeForFirestore(session));
 };
 
 export const clearUserData = async (uid: string) => {

@@ -986,13 +986,13 @@ useStore.subscribe((state, prevState) => {
         
         if (state.activePlanId) {
           // V2 user
-          await saveUserConfig(state.firebaseUser!.uid, {
+          await saveUserConfig(state.firebaseUser!.uid, JSON.parse(JSON.stringify({
             hasCompletedOnboarding: state.hasCompletedOnboarding,
             activePlanId: state.activePlanId,
             weeklyGoalHours: state.weeklyGoalHours, // We can store this at config level or plan level
             cycleQueue: state.cycleQueue,
-            activeTask: state.activeTask,
-          });
+            activeTask: state.activeTask ?? null,
+          })));
           
           if (state.userProfile !== prevState.userProfile) {
             import('./lib/db').then(async ({ savePlanDocument, deletePlanDocument }) => {
@@ -1056,13 +1056,13 @@ useStore.subscribe((state, prevState) => {
           }
         } else {
           // Legacy user fallback
-          await saveLegacyUserBaseData(state.firebaseUser!.uid, {
+          await saveLegacyUserBaseData(state.firebaseUser!.uid, JSON.parse(JSON.stringify({
             hasCompletedOnboarding: state.hasCompletedOnboarding,
             weeklyGoalHours: state.weeklyGoalHours,
             userProfile: state.userProfile,
             cycleQueue: state.cycleQueue,
-            activeTask: state.activeTask,
-          });
+            activeTask: state.activeTask ?? null,
+          })));
         }
       } catch (e) {
         console.error("Failed to sync base data to DB", e);
