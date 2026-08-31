@@ -1,8 +1,10 @@
+import { isQaVisualEnabled } from '../qa/qaFlags';
 import { db } from './firebase';
 import { doc, writeBatch } from 'firebase/firestore';
 import type { Plan, Subject, Topic } from '../domain/types';
 
 export const migrateLegacyToV2 = async (uid: string, legacyData: any) => {
+  if (isQaVisualEnabled()) return false;
   if (!legacyData || !legacyData.userProfile || !legacyData.userProfile.subjects) {
     return false; // Nothing to migrate
   }

@@ -20,7 +20,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -49,4 +49,24 @@ jobs:
         with:
           name: efederal-qa-visual
           path: dist/
+          retention-days: 7
+
+      - name: Install Playwright Browsers
+        run: npx playwright install chromium
+
+      - name: Serve QA Visual in background
+        run: npm run preview -- --host 127.0.0.1 --port 4173 &
+
+      - name: Wait for server
+        run: sleep 5
+
+      - name: Run Visual QA Screenshot Test
+        run: node scripts/qa/captureVisualQa.mjs
+
+      - name: Upload QA Visual Screenshots
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: efederal-qa-screenshots
+          path: qa-screenshots/
           retention-days: 7

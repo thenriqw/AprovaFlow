@@ -1,3 +1,4 @@
+import { isQaVisualEnabled } from '../qa/qaFlags';
 import { doc, setDoc, updateDoc, collection, serverTimestamp, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import { ImportJob } from '../domain/types';

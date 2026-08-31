@@ -1,4 +1,4 @@
-import { isQaVisualEnabled } from '../qa/qaVisualAdapter';
+import { isQaVisualEnabled } from '../qa/qaFlags';
 import React, { useState } from 'react';
 import { cn } from '../lib/utils';
 import { 

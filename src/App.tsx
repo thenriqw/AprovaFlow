@@ -16,7 +16,8 @@ import { initAuth, googleSignIn } from './lib/firebase';
 import { getUserConfig, loadPlanData, getPlans, getLegacyUserData, saveLegacyUserBaseData, saveLegacySessionToDb } from './lib/db';
 import { migrateLegacyToV2 } from './lib/migration';
 import { subscribeToImportJobs } from './lib/importService';
-import { isQaVisualEnabled, bootstrapQaVisualMode } from './qa/qaVisualAdapter';
+import { isQaVisualEnabled } from './qa/qaFlags';
+import { bootstrapQaVisualMode } from './qa/qaVisualAdapter';
 
 function App() {
   const { activeTab, setActiveTab, setActiveTask, hasCompletedOnboarding, authReady, setAuthReady, firebaseUser, setFirebaseUser, setSyncingFromDb, loadFromDb, setImports } = useStore();

@@ -1,4 +1,4 @@
-import { isQaVisualEnabled } from '../qa/qaVisualAdapter';
+import { isQaVisualEnabled } from '../qa/qaFlags';
 import { doc, getDoc, setDoc, collection, getDocs, writeBatch, deleteDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Plan, Subject, Topic, StudySession, StudyActivity, Resource } from '../domain/types';
@@ -106,6 +106,7 @@ export const saveLegacySessionToDb = async (uid: string, session: any) => {
 };
 
 export const clearUserData = async (uid: string) => {
+  if (isQaVisualEnabled()) return;
   // Danger! We should probably archive instead, but keeping this for testing
   const userRef = doc(db, 'users', uid);
   await setDoc(userRef, {

@@ -1,14 +1,14 @@
+import { isQaVisualEnabled } from './qaFlags';
 import { buildEnemQaDataset } from './enemSeed';
 import { useStore } from '../store';
 
-export const isQaVisualEnabled = () => {
-  return (import.meta as any).env.VITE_QA_VISUAL === 'true' &&
-         new URLSearchParams(window.location.search).get('qaVisual') === '1';
-};
 
 export const bootstrapQaVisualMode = () => {
   if (!isQaVisualEnabled()) return;
   console.log('Bootstrapping QA Visual Mode...');
+  // Known QA limitation:
+  // priority calculations use the runtime system clock.
+
 
   const dataset = buildEnemQaDataset();
 
@@ -58,13 +58,15 @@ export const bootstrapQaVisualMode = () => {
     id: s.key.replace('_', '-'),
     subjectId: s.subjectKey.replace('_', '-'),
     topicId: s.topicKey.replace('_', '-'),
+    subject: dataset.subjects.find((sub: any) => sub.key === s.subjectKey)?.name || 'Desconhecido',
+    topic: dataset.topics.find((top: any) => top.key === s.topicKey)?.name || 'Desconhecido',
     activityId: s.activityKey ? s.activityKey.replace('_', '-') : null,
     activityType: s.activityType,
     date: s.date,
     durationSeconds: s.durationSeconds,
-    questionsTotal: s.questionsTotal,
-    questionsCorrect: s.questionsCorrect,
-    errorReason: s.errorReason,
+    questionsTotal: s.questionsTotal ?? 0,
+    questionsCorrect: s.questionsCorrect ?? 0,
+    errorReason: s.errorReason ?? '',
     planId
   }));
 

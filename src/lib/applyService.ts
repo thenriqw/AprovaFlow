@@ -1,3 +1,4 @@
+import { isQaVisualEnabled } from '../qa/qaFlags';
 import { writeBatch, doc, collection, getDoc, runTransaction } from 'firebase/firestore';
 import { db } from './firebase';
 import { ImportJob, Subject, Topic, StudyActivity, ActivityType } from '../domain/types';
