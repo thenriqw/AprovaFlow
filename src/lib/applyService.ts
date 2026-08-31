@@ -1,6 +1,7 @@
-import { writeBatch, doc, collection } from 'firebase/firestore';
+import { writeBatch, doc, collection, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { ImportJob, Subject, Topic, StudyActivity, ActivityType } from '../domain/types';
+import { updateImportJob } from './importService';
 
 // Simple normalizer for conflict matching
 function normalizeStr(s: string) {
@@ -12,14 +13,24 @@ export async function applyImportProposal(
   planId: string,
   importJob: ImportJob,
   existingSubjects: Subject[],
-  existingTopics: Topic[]
+  existingTopics: Topic[],
+  selectedSubjects?: string[], // IDs or names of subjects to import
+  selectedTopics?: Record<string, string[]> // Map of subject name -> array of topic names
 ) {
   if (!importJob.proposal || importJob.status !== 'needs_review') {
     throw new Error('Importação inválida para aplicação.');
   }
 
-  const batch = writeBatch(db);
+  // Idempotency: Lock the job by setting it to 'applying'
+  // Verify it hasn't been started yet
+  const jobRef = doc(db, 'users', userId, 'imports', importJob.id);
+  const jobSnap = await getDoc(jobRef);
+  if (!jobSnap.exists() || jobSnap.data().status !== 'needs_review') {
+    throw new Error('Importação já processada ou em andamento.');
+  }
   
+  await updateImportJob(userId, importJob.id, { status: 'applying' });
+
   const subjectsRef = collection(db, 'users', userId, 'plans', planId, 'subjects');
   const topicsRef = collection(db, 'users', userId, 'plans', planId, 'topics');
   const activitiesRef = collection(db, 'users', userId, 'plans', planId, 'activities');
@@ -30,80 +41,125 @@ export async function applyImportProposal(
   let topicsAdded = 0;
   let activitiesAdded = 0;
 
-  for (const subjectProp of importJob.proposal.subjects) {
-    // Conflict detection
-    let subjectId = '';
-    const normPropSubject = normalizeStr(subjectProp.name);
-    const existingSub = existingSubjects.find(s => normalizeStr(s.name) === normPropSubject);
-    
-    if (existingSub) {
-      subjectId = existingSub.id;
-    } else {
-      const newSubRef = doc(subjectsRef);
-      subjectId = newSubRef.id;
-      batch.set(newSubRef, {
-        id: subjectId,
-        planId,
-        name: subjectProp.name,
-        importance: 3,
-        difficulty: 3,
-        createdAt: now,
-        updatedAt: now
-      });
-      subjectsAdded++;
-    }
-
-    for (const topicProp of subjectProp.topics) {
-      let topicId = '';
-      const normPropTopic = normalizeStr(topicProp.name);
-      const existingTop = existingTopics.find(t => t.subjectId === subjectId && normalizeStr(t.name) === normPropTopic);
-      
-      if (existingTop) {
-        topicId = existingTop.id;
-      } else {
-        const newTopRef = doc(topicsRef);
-        topicId = newTopRef.id;
-        batch.set(newTopRef, {
-          id: topicId,
-          planId,
-          subjectId,
-          name: topicProp.name,
-          createdAt: now,
-          updatedAt: now
-        });
-        topicsAdded++;
-      }
-
-      for (const actProp of topicProp.activities) {
-        const newActRef = doc(activitiesRef);
-        batch.set(newActRef, {
-          id: newActRef.id,
-          planId,
-          subjectId,
-          topicId,
-          title: actProp.title,
-          type: actProp.type || 'Revisão',
-          source: actProp.source || importJob.title,
-          expectedDurationSeconds: actProp.expectedDurationSeconds || 3600,
-          expectedQuestions: actProp.expectedQuestions || 0,
-          status: 'pending',
-          createdAt: now,
-          updatedAt: now
-        });
-        activitiesAdded++;
-      }
-    }
-  }
-
-  // Update job status
-  const jobRef = doc(db, 'imports', importJob.id);
-  batch.update(jobRef, { status: 'applied', updatedAt: now, planId });
-
-  // Add a massive batch commit check (limit is 500 in firestore)
-  // For this rodada we assume small/medium imports that fit in 500
-  // In a real huge import we'd chunk it. We'll do a simple chunking here if needed
+  const batches: any[] = [];
+  let currentBatch = writeBatch(db);
+  let opCount = 0;
   
-  await batch.commit();
+  const CHUNK_SIZE = 450;
 
-  return { subjectsAdded, topicsAdded, activitiesAdded };
+  const commitBatchAndReset = () => {
+    batches.push(currentBatch.commit());
+    currentBatch = writeBatch(db);
+    opCount = 0;
+  };
+
+  const addOpToBatch = (ref: any, data: any) => {
+    currentBatch.set(ref, data);
+    opCount++;
+    if (opCount >= CHUNK_SIZE) {
+      commitBatchAndReset();
+    }
+  };
+
+  try {
+    for (const subjectProp of importJob.proposal.subjects) {
+      if (selectedSubjects && !selectedSubjects.includes(subjectProp.name)) {
+        continue; // Skipped in UI
+      }
+
+      // Conflict detection
+      let subjectId = '';
+      const normPropSubject = normalizeStr(subjectProp.name);
+      const existingSub = existingSubjects.find(s => normalizeStr(s.name) === normPropSubject);
+      
+      if (existingSub) {
+        subjectId = existingSub.id;
+      } else {
+        const newSubRef = doc(subjectsRef);
+        subjectId = newSubRef.id;
+        addOpToBatch(newSubRef, {
+          id: subjectId,
+          planId,
+          name: subjectProp.name,
+          importance: 3, // Internal default
+          difficulty: 3, // Internal default
+          createdAt: now,
+          updatedAt: now
+        });
+        subjectsAdded++;
+        
+        // Temporarily add to existingSubjects array to prevent duplicate subjects in the same import chunk
+        existingSubjects.push({ id: subjectId, planId, name: subjectProp.name, importance: 3, difficulty: 3, createdAt: now, updatedAt: now });
+      }
+
+      for (const topicProp of subjectProp.topics) {
+        if (selectedTopics && selectedTopics[subjectProp.name] && !selectedTopics[subjectProp.name].includes(topicProp.name)) {
+          continue; // Skipped in UI
+        }
+
+        let topicId = '';
+        const normPropTopic = normalizeStr(topicProp.name);
+        const existingTop = existingTopics.find(t => t.subjectId === subjectId && normalizeStr(t.name) === normPropTopic);
+        
+        if (existingTop) {
+          topicId = existingTop.id;
+        } else {
+          const newTopRef = doc(topicsRef);
+          topicId = newTopRef.id;
+          addOpToBatch(newTopRef, {
+            id: topicId,
+            planId,
+            subjectId,
+            name: topicProp.name,
+            createdAt: now,
+            updatedAt: now
+          });
+          topicsAdded++;
+          
+          existingTopics.push({ id: topicId, planId, subjectId, name: topicProp.name, createdAt: now, updatedAt: now });
+        }
+
+        for (const actProp of topicProp.activities) {
+          // Do not fake activity data
+          if (!actProp.title || !actProp.type || !actProp.expectedDurationSeconds) {
+            continue;
+          }
+
+          const newActRef = doc(activitiesRef);
+          addOpToBatch(newActRef, {
+            id: newActRef.id,
+            planId,
+            subjectId,
+            topicId,
+            title: actProp.title,
+            type: actProp.type,
+            source: actProp.source || null, // Optional
+            expectedDurationSeconds: actProp.expectedDurationSeconds,
+            expectedQuestions: actProp.expectedQuestions || 0,
+            status: 'pending',
+            createdAt: now,
+            updatedAt: now
+          });
+          activitiesAdded++;
+        }
+      }
+    }
+
+    if (opCount > 0) {
+      batches.push(currentBatch.commit());
+    }
+
+    // Wait for all chunks to commit
+    await Promise.all(batches);
+
+    // Update job status to applied only if all succeeded
+    await updateImportJob(userId, importJob.id, { status: 'applied', planId });
+
+    return { subjectsAdded, topicsAdded, activitiesAdded };
+  } catch (error: any) {
+    console.error("Erro durante aplicação em chunks:", error);
+    await updateImportJob(userId, importJob.id, { status: 'partial', error: error.message || 'Erro durante aplicação parcial.' });
+    throw error;
+  }
 }
+

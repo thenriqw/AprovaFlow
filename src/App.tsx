@@ -14,17 +14,30 @@ import { APP_NAME } from './config/constants';
 import { initAuth, googleSignIn } from './lib/firebase';
 import { getUserConfig, loadPlanData, getPlans, getLegacyUserData, saveLegacyUserBaseData, saveLegacySessionToDb } from './lib/db';
 import { migrateLegacyToV2 } from './lib/migration';
+import { subscribeToImportJobs } from './lib/importService';
 
 function App() {
-  const { activeTab, setActiveTab, setActiveTask, hasCompletedOnboarding, authReady, setAuthReady, firebaseUser, setFirebaseUser, setSyncingFromDb, loadFromDb } = useStore();
+  const { activeTab, setActiveTab, setActiveTask, hasCompletedOnboarding, authReady, setAuthReady, firebaseUser, setFirebaseUser, setSyncingFromDb, loadFromDb, setImports } = useStore();
   const [showMigration, setShowMigration] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
 
   useEffect(() => {
+    let importsUnsubscribe: (() => void) | undefined;
+    
     const unsubscribe = initAuth(
       async (user) => {
         setFirebaseUser(user);
+        if (importsUnsubscribe) {
+          importsUnsubscribe();
+          importsUnsubscribe = undefined;
+        }
+
         if (user) {
+          // Subscribe to real-time import jobs
+          importsUnsubscribe = subscribeToImportJobs(user.uid, (jobs) => {
+            useStore.getState().setImports(jobs);
+          });
+
           try {
             // First check if it's a V2 user
             let config = await getUserConfig(user.uid);
@@ -131,11 +144,17 @@ function App() {
           }
         } else {
           setShowMigration(false);
+          useStore.getState().setImports([]);
         }
         setAuthReady(true);
       }
     );
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (importsUnsubscribe) {
+        importsUnsubscribe();
+      }
+    };
   }, [setFirebaseUser, setAuthReady, loadFromDb, setSyncingFromDb]);
 
   const handleMigration = async (shouldMigrate: boolean) => {

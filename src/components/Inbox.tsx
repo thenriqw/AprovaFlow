@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Upload, FileText, Database, File, AlertCircle, FileType2, Search, Check, FileUp } from 'lucide-react';
 import { useStore } from '../store';
-import { extractTextFromFile, parseWithGemini } from '../lib/extractor';
+import { extractTextFromFile, parseWithGemini, parseSpreadsheetDeterministically } from '../lib/extractor';
 import { createImportJob, updateImportJob } from '../lib/importService';
 import ReviewDialog from './ReviewDialog';
 import { ImportJob } from '../domain/types';
@@ -16,6 +16,14 @@ export default function Inbox() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const generateHash = async (text: string) => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(text);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !firebaseUser) return;
@@ -26,26 +34,48 @@ export default function Inbox() {
       return;
     }
 
+    let currentJobId: string | null = null;
+
     try {
       setIsProcessing(true);
       setError('');
+      
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'text';
+      let sourceType: 'pdf' | 'docx' | 'xlsx' | 'csv' | 'text' = 'text';
+      if (['pdf', 'docx', 'xlsx', 'csv'].includes(ext)) {
+        sourceType = ext as any;
+      }
       
       // 1. Create Job
       const job = await createImportJob(firebaseUser.uid, {
         title: file.name,
         filename: file.name,
-        sourceType: 'text', // Can refine this later
+        sourceType,
         status: 'extracting'
       });
+      currentJobId = job.id;
 
       // 2. Extract Text
       const { content, detectedType } = await extractTextFromFile(file);
       
-      // 3. Update Job
-      await updateImportJob(job.id, { status: 'processing' });
+      const contentHash = await generateHash(content);
 
-      // 4. Parse with AI
-      const proposal = await parseWithGemini(content, detectedType, file.name);
+      // Check for duplicates
+      const isDuplicate = imports.some(i => i.contentHash === contentHash && i.status !== 'failed');
+      if (isDuplicate) {
+        throw new Error('Este arquivo já foi importado (mesmo conteúdo).');
+      }
+      
+      // 3. Update Job
+      await updateImportJob(job.id, { status: 'processing', contentHash });
+
+      // 4. Parse with AI or Local Parser
+      let proposal;
+      if (['csv', 'xlsx'].includes(detectedType)) {
+        proposal = parseSpreadsheetDeterministically(content, file.name);
+      } else {
+        proposal = await parseWithGemini(content, detectedType, file.name);
+      }
 
       // 5. Update Job with Proposal
       await updateImportJob(job.id, { 
@@ -53,13 +83,18 @@ export default function Inbox() {
         proposal,
         warnings: proposal.warnings || []
       });
-
-      // Set to review mode if we found the job locally
-      // The local listener will update the list
       
     } catch (err: any) {
       console.error(err);
-      setError(err.message === 'PDF_NO_TEXT' ? 'Este PDF parece ser escaneado. A leitura por OCR ainda não está disponível.' : err.message);
+      const msg = err.message === 'PDF_NO_TEXT' ? 'Este PDF parece ser escaneado. A leitura por OCR ainda não está disponível.' : err.message;
+      setError(msg);
+      if (currentJobId) {
+        try {
+          await updateImportJob(currentJobId, { status: 'failed', error: msg });
+        } catch (updateErr) {
+          console.error("Failed to update job status to failed", updateErr);
+        }
+      }
     } finally {
       setIsProcessing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -74,6 +109,8 @@ export default function Inbox() {
       return;
     }
 
+    let currentJobId: string | null = null;
+
     try {
       setIsProcessing(true);
       setError('');
@@ -83,6 +120,15 @@ export default function Inbox() {
         sourceType: 'text',
         status: 'processing'
       });
+      currentJobId = job.id;
+
+      const contentHash = await generateHash(textInput);
+      const isDuplicate = imports.some(i => i.contentHash === contentHash && i.status !== 'failed');
+      if (isDuplicate) {
+        throw new Error('Este texto já foi importado (mesmo conteúdo).');
+      }
+
+      await updateImportJob(job.id, { contentHash });
 
       const proposal = await parseWithGemini(textInput, 'text', 'texto-colado.txt');
 
@@ -96,6 +142,13 @@ export default function Inbox() {
 
     } catch (err: any) {
       setError(err.message);
+      if (currentJobId) {
+        try {
+          await updateImportJob(currentJobId, { status: 'failed', error: err.message });
+        } catch (updateErr) {
+          console.error("Failed to update job status to failed", updateErr);
+        }
+      }
     } finally {
       setIsProcessing(false);
     }
