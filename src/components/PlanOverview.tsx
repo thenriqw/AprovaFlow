@@ -104,7 +104,22 @@ export default function PlanOverview() {
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="flex justify-between items-end">
+              
+              {totalCapacityRemaining !== null && pendingDemandMinutes <= totalCapacityRemaining && (
+                <div className="bg-emerald-50 text-emerald-800 p-5 rounded-xl border border-emerald-100">
+                  <h3 className="font-bold text-lg mb-1">Seu plano cabe no tempo disponível.</h3>
+                  <p className="text-emerald-700 text-sm">Você tem {Math.round(totalCapacityRemaining / 60)}h de capacidade para {Math.round(pendingDemandMinutes / 60)}h pendentes.</p>
+                </div>
+              )}
+              
+              {totalCapacityRemaining !== null && pendingDemandMinutes > totalCapacityRemaining && (
+                <div className="bg-rose-50 text-rose-800 p-5 rounded-xl border border-rose-100">
+                  <h3 className="font-bold text-lg mb-1">Seu plano precisa de ajuste.</h3>
+                  <p className="text-rose-700 text-sm">Faltam {Math.round((pendingDemandMinutes - totalCapacityRemaining) / 60)}h para acomodar toda a demanda atual.</p>
+                </div>
+              )}
+
+              <div className="flex justify-between items-end border-t border-neutral-100 pt-6">
                 <div>
                   <p className="text-sm font-bold text-neutral-500 uppercase tracking-wider mb-1">Carga Pendente</p>
                   <p className="text-3xl font-bold text-neutral-900">{Math.round(pendingDemandMinutes / 60)}h</p>
@@ -117,12 +132,6 @@ export default function PlanOverview() {
                   </div>
                 )}
               </div>
-              {totalCapacityRemaining !== null && pendingDemandMinutes > totalCapacityRemaining && (
-                <div className="bg-red-50 text-red-700 p-4 rounded-xl text-sm font-medium">
-                  Atenção: Sua demanda pendente ultrapassa sua capacidade de tempo disponível até a data da prova. 
-                  Recomendamos ajustar as horas diárias ou focar nos tópicos de maior peso.
-                </div>
-              )}
             </div>
           )}
         </div>

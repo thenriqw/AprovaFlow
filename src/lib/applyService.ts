@@ -18,6 +18,9 @@ export async function applyImportProposal(
   selectedSubjects?: string[], // IDs or names of subjects to import
   selectedTopics?: Record<string, string[]> // Map of subject name -> array of topic names
 ) {
+  if (isQaVisualEnabled()) {
+    throw new Error('Importação desativada no QA Visual.');
+  }
   if (!importJob.proposal || importJob.status !== 'needs_review') {
     throw new Error('Importação inválida para aplicação.');
   }

@@ -166,10 +166,10 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
           <div className="relative">
             <button 
               onClick={() => setShowPlanMenu(!showPlanMenu)}
-              className="flex items-center gap-2 text-sm font-semibold text-neutral-900 bg-neutral-100 hover:bg-neutral-200 px-3 py-1.5 rounded-full transition-colors"
+              className="flex items-center gap-1.5 text-sm font-semibold text-neutral-900 bg-neutral-100 hover:bg-neutral-200 px-3 py-1.5 rounded-full transition-colors max-w-[150px]"
             >
-              {isSwitching ? 'Carregando...' : (activePlan?.name || 'Sem plano')}
-              <ChevronDown size={14} className={cn("transition-transform", showPlanMenu && "rotate-180")} />
+              <span className="truncate">{isSwitching ? 'Carregando...' : (activePlan?.name || 'Sem plano')}</span>
+              <ChevronDown size={14} className={cn("transition-transform flex-shrink-0", showPlanMenu && "rotate-180")} />
             </button>
 
             {showPlanMenu && (
@@ -227,50 +227,49 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
         </div>
       </main>
 
-      {/* Global FAB Mobile */}
-      {(!['settings', 'create-plan', 'onboarding'].includes(activeTab)) && (
-      <div className="md:hidden fixed bottom-20 right-4 z-50">
-        <div className="relative">
-          {showFabMenu && (
-            <div className="absolute bottom-full right-0 mb-4 flex flex-col gap-3 items-end">
-              <button 
-                onClick={() => { setActiveTab('timer'); setShowFabMenu(false); }}
-                className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-full shadow-lg border border-neutral-100 text-sm font-semibold text-neutral-900 whitespace-nowrap"
-              >
-                Registrar sessão
-                <div className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center">
-                  <Play size={14} fill="currentColor" />
-                </div>
-              </button>
-            </div>
-          )}
-          <button
-            onClick={() => setShowFabMenu(!showFabMenu)}
-            className="w-14 h-14 bg-neutral-900 hover:bg-neutral-800 text-white rounded-full shadow-xl shadow-neutral-900/20 flex items-center justify-center transition-transform active:scale-95"
-          >
-            <Plus size={24} className={cn("transition-transform duration-300", showFabMenu && "rotate-45")} />
-          </button>
+      {/* Floating Menu for Mobile + */}
+      {showFabMenu && !['settings', 'create-plan', 'onboarding'].includes(activeTab) && (
+        <div className="md:hidden fixed bottom-[76px] left-1/2 -translate-x-1/2 z-50 flex flex-col gap-3 items-center">
+           <button 
+             onClick={() => { setActiveTab('timer'); setShowFabMenu(false); }}
+             className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-full shadow-lg border border-neutral-100 text-sm font-semibold text-neutral-900 whitespace-nowrap"
+           >
+             Registrar sessão
+             <div className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center">
+               <Play size={14} fill="currentColor" />
+             </div>
+           </button>
         </div>
-      </div>
       )}
 
       {/* Bottom Nav Mobile */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 px-2 py-2 pb-safe flex justify-between items-center z-40">
-        {mainNavItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => {
-              setActiveTab(item.id);
-              setShowFabMenu(false);
-            }}
-            className={cn(
-              "flex flex-col items-center justify-center w-16 h-12 rounded-lg transition-colors",
-              activeTab === item.id ? "text-neutral-900" : "text-neutral-400"
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 px-1 py-2 pb-safe flex justify-around items-center z-40">
+        {mainNavItems.map((item, idx) => (
+          <React.Fragment key={item.id}>
+            {idx === 3 && (
+              <div className="relative -top-5">
+                <button
+                  onClick={() => setShowFabMenu(!showFabMenu)}
+                  className="w-14 h-14 bg-neutral-900 hover:bg-neutral-800 text-white rounded-full shadow-lg shadow-neutral-900/20 flex items-center justify-center transition-transform active:scale-95 mx-1"
+                >
+                  <Plus size={24} className={cn("transition-transform duration-300", showFabMenu && "rotate-45")} />
+                </button>
+              </div>
             )}
-          >
-            <item.icon size={22} strokeWidth={activeTab === item.id ? 2.5 : 2} className="mb-1" />
-            <span className="text-[10px] font-medium tracking-wide">{item.label}</span>
-          </button>
+            <button
+              onClick={() => {
+                setActiveTab(item.id);
+                setShowFabMenu(false);
+              }}
+              className={cn(
+                "flex flex-col items-center justify-center w-14 h-12 rounded-lg transition-colors",
+                activeTab === item.id ? "text-neutral-900" : "text-neutral-400"
+              )}
+            >
+              <item.icon size={22} strokeWidth={activeTab === item.id ? 2.5 : 2} className="mb-1" />
+              <span className="text-[10px] font-medium tracking-wide">{item.label}</span>
+            </button>
+          </React.Fragment>
         ))}
       </nav>
     </div>

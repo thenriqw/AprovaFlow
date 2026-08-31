@@ -167,7 +167,7 @@ export default function Inbox() {
       <div className="flex items-center gap-3">
         <div className="w-1.5 h-8 bg-neutral-900 rounded-full"></div>
         <div>
-          <h1 className="text-3xl font-serif font-bold text-neutral-900">Study Inbox</h1>
+          <h1 className="text-3xl font-serif font-bold text-neutral-900">Entrada</h1>
           <p className="text-neutral-500 text-sm mt-1">Importe editais, cronogramas e conteúdos para o seu plano.</p>
         </div>
       </div>

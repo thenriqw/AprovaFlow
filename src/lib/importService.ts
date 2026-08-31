@@ -4,6 +4,9 @@ import { db } from './firebase';
 import { ImportJob } from '../domain/types';
 
 export async function createImportJob(userId: string, data: Partial<ImportJob>): Promise<ImportJob> {
+  if (isQaVisualEnabled()) {
+    throw new Error('Importação desativada no QA Visual.');
+  }
   const importsRef = collection(db, 'users', userId, 'imports');
   const importRef = doc(importsRef);
   
@@ -31,6 +34,7 @@ export async function createImportJob(userId: string, data: Partial<ImportJob>):
 }
 
 export async function updateImportJob(userId: string, id: string, data: Partial<ImportJob>) {
+  if (isQaVisualEnabled()) return;
   const importRef = doc(db, 'users', userId, 'imports', id);
   await updateDoc(importRef, {
     ...data,
@@ -39,6 +43,10 @@ export async function updateImportJob(userId: string, id: string, data: Partial<
 }
 
 export function subscribeToImportJobs(userId: string, onUpdate: (jobs: ImportJob[]) => void): () => void {
+  if (isQaVisualEnabled()) {
+    onUpdate([]);
+    return () => {};
+  }
   const importsQuery = query(
     collection(db, 'users', userId, 'imports'),
     orderBy('createdAt', 'desc')

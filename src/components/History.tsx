@@ -49,10 +49,17 @@ export default function History({ hideHeader = false }: { hideHeader?: boolean }
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-neutral-500">Desempenho</p>
-                    <p className="font-bold text-neutral-900">
-                      {session.questionsCorrect}/{session.questionsTotal} 
-                      <span className="text-neutral-400 font-normal text-xs ml-1">acertos</span>
-                    </p>
+                    {(session.questionsTotal ?? 0) > 0 ? (
+                      <p className="font-bold text-neutral-900">
+                        {session.questionsCorrect}/{session.questionsTotal} 
+                        <span className="text-neutral-400 font-normal text-xs ml-1">acertos</span>
+                      </p>
+                    ) : (
+                      <div>
+                        <p className="font-bold text-neutral-900 leading-none mt-1">—</p>
+                        <p className="text-neutral-400 text-[10px] uppercase font-bold tracking-wider mt-0.5">sem questões</p>
+                      </div>
+                    )}
                   </div>
                   <button 
                     onClick={() => removeSession(session.id)}
