@@ -41,259 +41,64 @@ function createPRNG(seedStr: string) {
   }
 }
 
-export function buildEnemQaDatasetPreview() {
+export function buildEnemQaDataset() {
   const rand = createPRNG('enem-2026-realista-v1');
   function randomInt(min: number, max: number) { return Math.floor(rand() * (max - min + 1)) + min; }
   function randomChoice<T>(arr: T[]): T { return arr[randomInt(0, arr.length - 1)]; }
   function randomFloat(min: number, max: number) { return rand() * (max - min) + min; }
 
-  let topicsCount = 0;
-  for (const s of DATA.subjects) {
-    topicsCount += s.topics.length;
-  }
-
-  const generatedActivities = [];
-  let completedActivities = 0;
-  let pendingActivities = 0;
-  
-  for (const s of DATA.subjects) {
-    for (const t of s.topics) {
-      const isAdvanced = ['Citologia', 'Membrana plasmática', 'Genética', 'Interpretação de texto', 'Gêneros textuais', 'Brasil Colônia', 'Era Vargas', 'Razão e proporção', 'Porcentagem', 'Regra de três'].includes(t);
-      const isOngoing = ['Função quadrática', 'Estatística', 'Probabilidade', 'Geometria plana', 'Dinâmica', 'Trabalho e energia', 'Estequiometria', 'Soluções', 'Ecologia', 'Fisiologia humana', 'Urbanização', 'Globalização'].includes(t);
-      const isWeak = ['Eletrodinâmica', 'Óptica', 'Hidrostática', 'Geometria espacial', 'Análise combinatória', 'Eletroquímica', 'Química orgânica'].includes(t);
-
-      let numActivities = 0;
-      if (isAdvanced) numActivities = randomInt(3, 4);
-      else if (isOngoing) numActivities = randomInt(2, 3);
-      else if (isWeak) numActivities = randomInt(1, 2);
-      else numActivities = randomInt(0, 1); 
-
-      for (let i = 0; i < numActivities; i++) {
-        const aType = randomChoice(['Videoaula', 'Leitura', 'Questões', 'Revisão', 'Questões', 'Videoaula']);
-        let status = 'pending';
-        if (isAdvanced) status = (rand() > 0.3) ? 'completed' : 'pending';
-        else if (isOngoing) status = (rand() > 0.5) ? 'completed' : 'pending';
-        else if (isWeak) status = 'pending';
-        else status = (rand() > 0.6) ? 'completed' : 'pending';
-
-        generatedActivities.push({ subject: s.name, topic: t, type: aType, status, isQuestions: aType === 'Questões' || aType === 'Simulado' });
-        if (status === 'completed') completedActivities++; else pendingActivities++;
+  const dataset: any = {
+    plan: {
+      name: 'ENEM 2026 — QA Realista',
+      objective: 'Medicina — ENEM 2026',
+      examDate: '2026-11-08T12:00:00Z',
+      qaSeedId: 'enem-2026-realista-v1',
+      availableTimePerDay: {
+        0: 2, 
+        1: 3,
+        2: 3,
+        3: 3,
+        4: 3,
+        5: 2,
+        6: 5  
       }
-    }
-  }
-
-  const startDate = new Date('2026-06-01T12:00:00Z');
-  const endDate = new Date('2026-08-30T12:00:00Z');
-  const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24));
-  
-  const specialDays: Record<string, string[]> = {
-    '2026-08-24': ['Matemática', 'Biologia'],
-    '2026-08-25': ['Física', 'Português'],
-    '2026-08-26': [], 
-    '2026-08-27': ['Química', 'Matemática'],
-    '2026-08-28': ['História'], 
-    '2026-08-29': ['Física', 'Química', 'Matemática', 'Português'], 
-    '2026-08-30': ['Biologia'] 
-  };
-
-  const generalSubjects = DATA.subjects.filter(s => s.name !== 'Redação');
-  const getLocalDateStr = (d: Date) => d.toISOString().split('T')[0];
-
-  const sessions = [];
-  
-  for (let i = 0; i <= totalDays; i++) {
-    const currentDay = new Date(startDate);
-    currentDay.setDate(startDate.getDate() + i);
-    const dateStr = getLocalDateStr(currentDay);
-
-    let dailySessions = 0;
-    let targetSubjects: string[] = [];
-
-    if (specialDays[dateStr]) {
-      targetSubjects = specialDays[dateStr];
-      dailySessions = targetSubjects.length;
-    } else {
-      const r = rand();
-      if (r < 0.28) dailySessions = 0;
-      else if (r < 0.45) dailySessions = 1; 
-      else if (r < 0.85) dailySessions = 2;
-      else if (r < 0.95) dailySessions = 3; 
-      else dailySessions = 4; 
-      
-      for (let j=0; j<dailySessions; j++) targetSubjects.push(randomChoice(generalSubjects).name);
-    }
-
-    for (const subName of targetSubjects) {
-      let sessDur = 0;
-      const rDur = rand();
-      if (rDur < 0.15) sessDur = randomInt(20, 35) * 60;
-      else if (rDur < 0.65) sessDur = randomInt(55, 95) * 60;
-      else sessDur = randomInt(100, 140) * 60;
-      sessDur += randomInt(0, 59);
-      
-      sessions.push({ subject: subName, date: currentDay.toISOString(), durationSeconds: sessDur });
-    }
-  }
-
-  for (let i = 0; i < 6; i++) {
-    const offset = 10 + 14 * i + randomInt(-2, 2);
-    const redDay = new Date(startDate);
-    redDay.setDate(startDate.getDate() + offset);
-    sessions.push({
-      subject: 'Redação',
-      date: redDay.toISOString(),
-      durationSeconds: randomInt(70, 110) * 60,
-      type: 'Redação'
-    });
-  }
-
-  const activitiesCount = generatedActivities.length;
-  const sessionsCount = sessions.length;
-  const totalStudySeconds = sessions.reduce((acc, s) => acc + s.durationSeconds, 0);
-  const totalStudyHours = totalStudySeconds / 3600;
-  const averageWeeklyHours = totalStudyHours / (91 / 7);
-  
-  const daysWithStudySet = new Set(sessions.map(s => s.date.split('T')[0]));
-  const daysWithStudy = daysWithStudySet.size;
-  const daysWithoutStudy = 91 - daysWithStudy;
-
-  sessions.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const firstSessionDate = sessions[0].date.split('T')[0];
-  const lastSessionDate = sessions[sessions.length - 1].date.split('T')[0];
-
-  const redacaoSessions = sessions.filter(s => s.subject === 'Redação').length;
-
-  return {
-    topicsCount,
-    activitiesCount,
-    completedActivities,
-    pendingActivities,
-    sessionsCount,
-    totalStudyHours: Number(totalStudyHours.toFixed(1)),
-    averageWeeklyHours: Number(averageWeeklyHours.toFixed(1)),
-    daysWithStudy,
-    daysWithoutStudy,
-    firstSessionDate,
-    lastSessionDate,
-    redacaoSessions
-  };
-}
-
-export async function seedEnemQa(uid: string) {
-  if (!uid) throw new Error('UID is required');
-
-  const preview = buildEnemQaDatasetPreview();
-
-  if (preview.activitiesCount < 90 || preview.activitiesCount > 130) {
-    throw new Error(`QA Constraint Failed: activitiesCount is ${preview.activitiesCount}`);
-  }
-  if (preview.sessionsCount < 130 || preview.sessionsCount > 160) {
-    throw new Error(`QA Constraint Failed: sessionsCount is ${preview.sessionsCount}`);
-  }
-  if (preview.firstSessionDate < '2026-06-01') {
-    throw new Error(`QA Constraint Failed: firstSessionDate is ${preview.firstSessionDate}`);
-  }
-  if (preview.lastSessionDate > '2026-08-30') {
-    throw new Error(`QA Constraint Failed: lastSessionDate is ${preview.lastSessionDate}`);
-  }
-  if (preview.redacaoSessions < 5 || preview.redacaoSessions > 7) {
-    throw new Error(`QA Constraint Failed: redacaoSessions is ${preview.redacaoSessions}`);
-  }
-  if (preview.averageWeeklyHours < 14 || preview.averageWeeklyHours > 17) {
-    throw new Error(`QA Constraint Failed: averageWeeklyHours is ${preview.averageWeeklyHours}`);
-  }
-
-  const plansRef = collection(db, 'users', uid, 'plans');
-  const q = query(plansRef, where('qaSeedId', '==', 'enem-2026-realista-v1'));
-  const existing = await getDocs(q);
-  if (!existing.empty) {
-    return { status: 'already_exists', message: 'O seed ENEM 2026 já existe na conta.' };
-  }
-
-  const rand = createPRNG('enem-2026-realista-v1');
-  function randomInt(min: number, max: number) { return Math.floor(rand() * (max - min + 1)) + min; }
-  function randomChoice<T>(arr: T[]): T { return arr[randomInt(0, arr.length - 1)]; }
-  function randomFloat(min: number, max: number) { return rand() * (max - min) + min; }
-
-  const newPlanRef = doc(plansRef);
-  const planId = newPlanRef.id;
-
-  let batch = writeBatch(db);
-  let opCount = 0;
-
-  async function commitBatch() {
-    if (opCount > 0) {
-      await batch.commit();
-      batch = writeBatch(db);
-      opCount = 0;
-    }
-  }
-
-  async function addOp() {
-    opCount++;
-    if (opCount >= 400) {
-      await commitBatch();
-    }
-  }
-
-  const now = new Date().toISOString();
-  
-  batch.set(newPlanRef, {
-    id: planId,
-    userId: uid,
-    name: 'ENEM 2026 — QA Realista',
-    objective: 'Medicina — ENEM 2026',
-    examDate: '2026-11-08T12:00:00Z',
-    qaSeedId: 'enem-2026-realista-v1',
-    availableTimePerDay: {
-      0: 2, 
-      1: 3,
-      2: 3,
-      3: 3,
-      4: 3,
-      5: 2,
-      6: 5  
     },
-    createdAt: now,
-    updatedAt: now
-  });
-  await addOp();
+    subjects: [],
+    topics: [],
+    activities: [],
+    sessions: []
+  };
+
+  let subjectIdCounter = 1;
+  let topicIdCounter = 1;
+  let activityIdCounter = 1;
+  let sessionIdCounter = 1;
 
   const subjectsMap: Record<string, string> = {};
   const topicsMap: Record<string, string> = {}; 
 
   for (const s of DATA.subjects) {
-    const sRef = doc(collection(db, 'users', uid, 'plans', planId, 'subjects'));
-    subjectsMap[s.name] = sRef.id;
-    batch.set(sRef, {
-      id: sRef.id,
+    const sKey = `subj_${subjectIdCounter++}`;
+    subjectsMap[s.name] = sKey;
+    dataset.subjects.push({
+      key: sKey,
       name: s.name,
-      planId,
       importance: s.imp,
       difficulty: s.diff,
       isArchived: false,
-      createdAt: now,
-      updatedAt: now
     });
-    await addOp();
 
     for (const t of s.topics) {
-      const tRef = doc(collection(db, 'users', uid, 'plans', planId, 'topics'));
-      topicsMap[`${s.name}::${t}`] = tRef.id;
-      batch.set(tRef, {
-        id: tRef.id,
+      const tKey = `top_${topicIdCounter++}`;
+      topicsMap[`${s.name}::${t}`] = tKey;
+      dataset.topics.push({
+        key: tKey,
         name: t,
-        planId,
-        subjectId: sRef.id,
-        createdAt: now,
-        updatedAt: now
+        subjectKey: sKey,
       });
-      await addOp();
     }
   }
 
-  const generatedActivities: any[] = [];
-  
   for (const s of DATA.subjects) {
     for (const t of s.topics) {
       const isAdvanced = ['Citologia', 'Membrana plasmática', 'Genética', 'Interpretação de texto', 'Gêneros textuais', 'Brasil Colônia', 'Era Vargas', 'Razão e proporção', 'Porcentagem', 'Regra de três'].includes(t);
@@ -307,7 +112,6 @@ export async function seedEnemQa(uid: string) {
       else numActivities = randomInt(0, 1); 
 
       for (let i = 0; i < numActivities; i++) {
-        const actRef = doc(collection(db, 'users', uid, 'plans', planId, 'activities'));
         const aType = randomChoice(['Videoaula', 'Leitura', 'Questões', 'Revisão', 'Questões', 'Videoaula'] as string[]);
         
         let status = 'pending';
@@ -317,28 +121,21 @@ export async function seedEnemQa(uid: string) {
         else status = (rand() > 0.6) ? 'completed' : 'pending';
 
         const expDur = randomInt(1500, 4200);
+        const actKey = `act_${activityIdCounter++}`;
         
         const actData: any = {
-          id: actRef.id,
+          key: actKey,
           title: `${aType} — ${t}`,
-          planId,
-          subjectId: subjectsMap[s.name],
-          topicId: topicsMap[`${s.name}::${t}`],
+          subjectKey: subjectsMap[s.name],
+          topicKey: topicsMap[`${s.name}::${t}`],
           type: aType,
           status,
           expectedDurationSeconds: expDur,
-          createdAt: now,
-          updatedAt: now
         };
 
         if (aType === 'Questões' || aType === 'Simulado') actData.expectedQuestions = randomInt(10, 30);
         
-        batch.set(actRef, actData);
-        await addOp();
-
-        if (status === 'completed') {
-          generatedActivities.push({ ...actData, subConfig: s });
-        }
+        dataset.activities.push(actData);
       }
     }
   }
@@ -359,7 +156,7 @@ export async function seedEnemQa(uid: string) {
 
   const generalSubjects = DATA.subjects.filter(s => s.name !== 'Redação');
   const getLocalDateStr = (d: Date) => d.toISOString().split('T')[0];
-
+  
   for (let i = 0; i <= totalDays; i++) {
     const currentDay = new Date(startDate);
     currentDay.setDate(startDate.getDate() + i);
@@ -384,7 +181,7 @@ export async function seedEnemQa(uid: string) {
 
     for (const subName of targetSubjects) {
       const subConfig = DATA.subjects.find(s => s.name === subName)!;
-      const sessRef = doc(collection(db, 'users', uid, 'plans', planId, 'sessions'));
+      const sKey = subjectsMap[subName];
       
       let sessDur = 0;
       const rDur = rand();
@@ -393,29 +190,28 @@ export async function seedEnemQa(uid: string) {
       else sessDur = randomInt(100, 140) * 60;
       sessDur += randomInt(0, 59);
       
-      const possibleActs = generatedActivities.filter(a => a.subjectId === subjectsMap[subName]);
-      const linkedAct = (possibleActs.length > 0 && rand() > 0.3) ? randomChoice(possibleActs) : null;
+      const possibleActs = dataset.activities.filter((a: any) => a.subjectKey === sKey);
+      const linkedAct: any = (possibleActs.length > 0 && rand() > 0.3) ? randomChoice(possibleActs) : null;
       
       const sType = linkedAct ? linkedAct.type : randomChoice(activityTypes as unknown as string[]);
       const isQuestions = sType === 'Questões' || sType === 'Simulado';
       
+      const sessKey = `sess_${sessionIdCounter++}`;
+      
       const sessData: any = {
-        id: sessRef.id,
-        planId,
-        subjectId: subjectsMap[subName],
-        activityId: linkedAct ? linkedAct.id : null,
+        key: sessKey,
+        subjectKey: sKey,
+        activityKey: linkedAct ? linkedAct.key : null,
         activityType: sType,
         date: currentDay.toISOString(),
         durationSeconds: sessDur,
-        createdAt: now,
-        updatedAt: now
       };
 
       if (linkedAct) {
-        sessData.topicId = linkedAct.topicId;
+        sessData.topicKey = linkedAct.topicKey;
       } else {
         const fallbackTopic = randomChoice(subConfig.topics);
-        sessData.topicId = topicsMap[`${subName}::${fallbackTopic}`];
+        sessData.topicKey = topicsMap[`${subName}::${fallbackTopic}`];
       }
 
       if (isQuestions) {
@@ -430,8 +226,7 @@ export async function seedEnemQa(uid: string) {
         }
       }
 
-      batch.set(sessRef, sessData);
-      await addOp();
+      dataset.sessions.push(sessData);
     }
   }
 
@@ -439,18 +234,224 @@ export async function seedEnemQa(uid: string) {
     const offset = 10 + 14 * i + randomInt(-2, 2);
     const redDay = new Date(startDate);
     redDay.setDate(startDate.getDate() + offset);
-    const sessRef = doc(collection(db, 'users', uid, 'plans', planId, 'sessions'));
-    batch.set(sessRef, {
-      id: sessRef.id,
-      planId,
-      subjectId: subjectsMap['Redação'],
-      topicId: topicsMap['Redação::Estrutura dissertativo-argumentativa'],
+    dataset.sessions.push({
+      key: `sess_${sessionIdCounter++}`,
+      subjectKey: subjectsMap['Redação'],
+      topicKey: topicsMap['Redação::Estrutura dissertativo-argumentativa'],
       activityType: 'Redação',
       date: redDay.toISOString(),
       durationSeconds: randomInt(70, 110) * 60,
+    });
+  }
+
+  return dataset;
+}
+
+export function summarizeDataset(dataset: any) {
+  const topicsCount = dataset.topics.length;
+  const activitiesCount = dataset.activities.length;
+  const completedActivities = dataset.activities.filter((a: any) => a.status === 'completed').length;
+  const pendingActivities = dataset.activities.filter((a: any) => a.status === 'pending').length;
+  const sessionsCount = dataset.sessions.length;
+  const totalStudySeconds = dataset.sessions.reduce((acc: number, s: any) => acc + s.durationSeconds, 0);
+  const totalStudyHours = totalStudySeconds / 3600;
+  const averageWeeklyHours = totalStudyHours / (91 / 7);
+  
+  const daysWithStudySet = new Set(dataset.sessions.map((s: any) => s.date.split('T')[0]));
+  const daysWithStudy = daysWithStudySet.size;
+  const daysWithoutStudy = 91 - daysWithStudy;
+
+  const sortedSessions = [...dataset.sessions].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const firstSessionDate = sortedSessions.length > 0 ? sortedSessions[0].date.split('T')[0] : 'N/A';
+  const lastSessionDate = sortedSessions.length > 0 ? sortedSessions[sortedSessions.length - 1].date.split('T')[0] : 'N/A';
+
+  const redacaoSubj = dataset.subjects.find((s: any) => s.name === 'Redação');
+  const redacaoSessions = redacaoSubj ? dataset.sessions.filter((s: any) => s.subjectKey === redacaoSubj.key).length : 0;
+
+  return {
+    topicsCount,
+    activitiesCount,
+    completedActivities,
+    pendingActivities,
+    sessionsCount,
+    totalStudyHours: Number(totalStudyHours.toFixed(1)),
+    averageWeeklyHours: Number(averageWeeklyHours.toFixed(1)),
+    daysWithStudy,
+    daysWithoutStudy,
+    firstSessionDate,
+    lastSessionDate,
+    redacaoSessions
+  };
+}
+
+export function buildEnemQaDatasetPreview() {
+  const dataset = buildEnemQaDataset();
+  return summarizeDataset(dataset);
+}
+
+export async function seedEnemQa(uid: string) {
+  if (!uid) throw new Error('UID is required');
+
+  const dataset = buildEnemQaDataset();
+  const preview = summarizeDataset(dataset);
+
+  if (preview.topicsCount !== 79) {
+    throw new Error(`QA Constraint Failed: topicsCount is ${preview.topicsCount}`);
+  }
+  if (preview.activitiesCount < 90 || preview.activitiesCount > 130) {
+    throw new Error(`QA Constraint Failed: activitiesCount is ${preview.activitiesCount}`);
+  }
+  if (preview.sessionsCount < 130 || preview.sessionsCount > 160) {
+    throw new Error(`QA Constraint Failed: sessionsCount is ${preview.sessionsCount}`);
+  }
+  if (preview.daysWithStudy < 60 || preview.daysWithStudy > 72) {
+    throw new Error(`QA Constraint Failed: daysWithStudy is ${preview.daysWithStudy}`);
+  }
+  if (preview.daysWithoutStudy < 19 || preview.daysWithoutStudy > 31) {
+    throw new Error(`QA Constraint Failed: daysWithoutStudy is ${preview.daysWithoutStudy}`);
+  }
+  if (preview.firstSessionDate < '2026-06-01') {
+    throw new Error(`QA Constraint Failed: firstSessionDate is ${preview.firstSessionDate}`);
+  }
+  if (preview.lastSessionDate > '2026-08-30') {
+    throw new Error(`QA Constraint Failed: lastSessionDate is ${preview.lastSessionDate}`);
+  }
+  if (preview.redacaoSessions < 5 || preview.redacaoSessions > 7) {
+    throw new Error(`QA Constraint Failed: redacaoSessions is ${preview.redacaoSessions}`);
+  }
+  if (preview.averageWeeklyHours < 14 || preview.averageWeeklyHours > 17) {
+    throw new Error(`QA Constraint Failed: averageWeeklyHours is ${preview.averageWeeklyHours}`);
+  }
+
+  for (const s of dataset.sessions) {
+    if (!s.subjectKey) throw new Error(`QA Constraint Failed: session missing subjectKey`);
+    if (!s.topicKey) throw new Error(`QA Constraint Failed: session missing topicKey`);
+    if (s.activityKey) {
+      const act = dataset.activities.find((a: any) => a.key === s.activityKey);
+      if (!act) throw new Error(`QA Constraint Failed: session references unknown activityKey`);
+      if (act.subjectKey !== s.subjectKey || act.topicKey !== s.topicKey) {
+         throw new Error(`QA Constraint Failed: session activityKey subject/topic mismatch`);
+      }
+    }
+  }
+
+  const plansRef = collection(db, 'users', uid, 'plans');
+  const q = query(plansRef, where('qaSeedId', '==', 'enem-2026-realista-v1'));
+  const existing = await getDocs(q);
+  if (!existing.empty) {
+    return { status: 'already_exists', message: 'O seed ENEM 2026 já existe na conta.' };
+  }
+
+  const newPlanRef = doc(plansRef);
+  const planId = newPlanRef.id;
+
+  const now = new Date().toISOString();
+  
+  const fsMap: Record<string, string> = {};
+
+  dataset.subjects.forEach((s: any) => { fsMap[s.key] = doc(collection(db, 'users', uid, 'plans', planId, 'subjects')).id; });
+  dataset.topics.forEach((t: any) => { fsMap[t.key] = doc(collection(db, 'users', uid, 'plans', planId, 'topics')).id; });
+  dataset.activities.forEach((a: any) => { fsMap[a.key] = doc(collection(db, 'users', uid, 'plans', planId, 'activities')).id; });
+  dataset.sessions.forEach((s: any) => { fsMap[s.key] = doc(collection(db, 'users', uid, 'plans', planId, 'sessions')).id; });
+
+  let batch = writeBatch(db);
+  let opCount = 0;
+
+  async function commitBatch() {
+    if (opCount > 0) {
+      await batch.commit();
+      batch = writeBatch(db);
+      opCount = 0;
+    }
+  }
+
+  async function addOp() {
+    opCount++;
+    if (opCount >= 400) {
+      await commitBatch();
+    }
+  }
+
+  batch.set(newPlanRef, {
+    id: planId,
+    userId: uid,
+    name: dataset.plan.name,
+    objective: dataset.plan.objective,
+    examDate: dataset.plan.examDate,
+    qaSeedId: dataset.plan.qaSeedId,
+    availableTimePerDay: dataset.plan.availableTimePerDay,
+    createdAt: now,
+    updatedAt: now
+  });
+  await addOp();
+
+  for (const s of dataset.subjects) {
+    const sRef = doc(db, 'users', uid, 'plans', planId, 'subjects', fsMap[s.key]);
+    batch.set(sRef, {
+      id: fsMap[s.key],
+      name: s.name,
+      planId,
+      importance: s.importance,
+      difficulty: s.difficulty,
+      isArchived: s.isArchived,
       createdAt: now,
       updatedAt: now
     });
+    await addOp();
+  }
+
+  for (const t of dataset.topics) {
+    const tRef = doc(db, 'users', uid, 'plans', planId, 'topics', fsMap[t.key]);
+    batch.set(tRef, {
+      id: fsMap[t.key],
+      name: t.name,
+      planId,
+      subjectId: fsMap[t.subjectKey],
+      createdAt: now,
+      updatedAt: now
+    });
+    await addOp();
+  }
+
+  for (const a of dataset.activities) {
+    const actRef = doc(db, 'users', uid, 'plans', planId, 'activities', fsMap[a.key]);
+    const actData: any = {
+      id: fsMap[a.key],
+      title: a.title,
+      planId,
+      subjectId: fsMap[a.subjectKey],
+      topicId: fsMap[a.topicKey],
+      type: a.type,
+      status: a.status,
+      expectedDurationSeconds: a.expectedDurationSeconds,
+      createdAt: now,
+      updatedAt: now
+    };
+    if (a.expectedQuestions !== undefined) actData.expectedQuestions = a.expectedQuestions;
+    batch.set(actRef, actData);
+    await addOp();
+  }
+
+  for (const s of dataset.sessions) {
+    const sessRef = doc(db, 'users', uid, 'plans', planId, 'sessions', fsMap[s.key]);
+    const sessData: any = {
+      id: fsMap[s.key],
+      planId,
+      subjectId: fsMap[s.subjectKey],
+      topicId: fsMap[s.topicKey],
+      activityId: s.activityKey ? fsMap[s.activityKey] : null,
+      activityType: s.activityType,
+      date: s.date,
+      durationSeconds: s.durationSeconds,
+      createdAt: now,
+      updatedAt: now
+    };
+    if (s.questionsTotal !== undefined) {
+      sessData.questionsTotal = s.questionsTotal;
+      sessData.questionsCorrect = s.questionsCorrect;
+      sessData.errorReason = s.errorReason;
+    }
+    batch.set(sessRef, sessData);
     await addOp();
   }
 

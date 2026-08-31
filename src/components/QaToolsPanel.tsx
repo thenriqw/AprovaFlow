@@ -49,7 +49,7 @@ export default function QaToolsPanel() {
             weeklyGoalHours: 0
           });
           useStore.setState({
-            activePlanId: '',
+            activePlanId: null,
             v2Subjects: [],
             v2Topics: [],
             v2Activities: [],
