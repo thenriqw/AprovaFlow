@@ -49,13 +49,13 @@ export default function Today() {
   const handleStart = () => {
     if (nextTask) {
       if (recommendedActivity) {
-        setActiveTask({
-          ...nextTask,
-          activityId: recommendedActivity.id,
-          activityType: recommendedActivity.type as any,
-          source: recommendedActivity.source,
-          expectedDurationSeconds: recommendedActivity.expectedDurationSeconds
-        });
+        const newTask: any = { ...nextTask };
+        if (recommendedActivity.id) newTask.activityId = recommendedActivity.id;
+        if (recommendedActivity.type) newTask.activityType = recommendedActivity.type;
+        if (recommendedActivity.source) newTask.source = recommendedActivity.source;
+        if (recommendedActivity.expectedDurationSeconds) newTask.expectedDurationSeconds = recommendedActivity.expectedDurationSeconds;
+        
+        setActiveTask(newTask);
       } else {
         setActiveTask(nextTask);
       }

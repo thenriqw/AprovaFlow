@@ -17,7 +17,22 @@ export const getUserConfig = async (uid: string) => {
 };
 
 
-const sanitizeForFirestore = (data: any) => JSON.parse(JSON.stringify(data));
+function sanitizeForFirestore(obj: any): any {
+  if (obj === undefined) return null;
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (obj instanceof Date) return obj;
+  // Preserve Firestore custom objects (e.g. FieldValue, Timestamp, DocumentReference)
+  if (obj.constructor && obj.constructor.name !== 'Object' && obj.constructor.name !== 'Array') return obj;
+  if (Array.isArray(obj)) return obj.map(item => item === undefined ? null : sanitizeForFirestore(item));
+  const result: any = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const val = obj[key];
+      if (val !== undefined) result[key] = sanitizeForFirestore(val);
+    }
+  }
+  return result;
+}
 
 export const saveUserConfig = async (uid: string, data: any) => {
   if (isQaVisualEnabled()) return;
