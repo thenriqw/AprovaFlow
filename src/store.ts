@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { syncManager } from './lib/syncManager';
 import { persist } from 'zustand/middleware';
 import { addDays, startOfWeek, format } from 'date-fns';
 import type { User as FirebaseUser } from 'firebase/auth';
@@ -526,9 +527,10 @@ createPlan: async (planData) => {
               const updated = { ...a, status: 'completed' as const, updatedAt: new Date().toISOString() };
               
               if (state.firebaseUser && state.activePlanId) {
-                import('./lib/db').then(({ savePlanDocument }) => 
-                  savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'activities', updated)
-                ).catch((err) => console.error("Failed to persist completed StudyActivity:", err));
+                syncManager.enqueue(`activities/${updated.id}`, async () => {
+                  const { savePlanDocument } = await import('./lib/db');
+                  await savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'activities', updated);
+                });
               }
               
               return updated;
@@ -616,18 +618,20 @@ createPlan: async (planData) => {
       addV2Subject: (subject) => set(state => {
         const v2Subjects = [...state.v2Subjects, subject];
         if (state.firebaseUser && state.activePlanId) {
-          import('./lib/db').then(({ savePlanDocument }) => 
-            savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'subjects', subject)
-          ).catch(console.error);
+          syncManager.enqueue(`subjects/${subject.id}`, async () => {
+          const { savePlanDocument } = await import('./lib/db');
+          await savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'subjects', subject);
+        });
         }
         return { v2Subjects };
       }),
       updateV2Subject: (subject) => set(state => {
         const v2Subjects = state.v2Subjects.map(s => s.id === subject.id ? subject : s);
         if (state.firebaseUser && state.activePlanId) {
-          import('./lib/db').then(({ savePlanDocument }) => 
-            savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'subjects', subject)
-          ).catch(console.error);
+          syncManager.enqueue(`subjects/${subject.id}`, async () => {
+          const { savePlanDocument } = await import('./lib/db');
+          await savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'subjects', subject);
+        });
         }
         return { v2Subjects };
       }),
@@ -639,9 +643,10 @@ deleteV2Subject: (id) => set(state => {
         const cycleQueue = state.cycleQueue.filter(c => c.subjectId !== id);
 
         if (state.firebaseUser && state.activePlanId) {
-          import('./lib/db').then(async ({ deletePlanDocument }) => {
-            const uid = state.firebaseUser.uid;
-            const pid = state.activePlanId;
+          syncManager.enqueue(`subjects/${id}/delete`, async () => {
+            const { deletePlanDocument } = await import('./lib/db');
+            const uid = state.firebaseUser!.uid;
+            const pid = state.activePlanId!;
             await deletePlanDocument(uid, pid, 'subjects', id);
             for (const t of relatedTopics) {
               await deletePlanDocument(uid, pid, 'topics', t.id);
@@ -650,25 +655,27 @@ deleteV2Subject: (id) => set(state => {
             for (const a of relatedActivities) {
               await deletePlanDocument(uid, pid, 'activities', a.id);
             }
-          }).catch(console.error);
+          });
         }
         return { v2Subjects, v2Topics, v2Activities, cycleQueue };
       }),
       addV2Topic: (topic) => set(state => {
         const v2Topics = [...state.v2Topics, topic];
         if (state.firebaseUser && state.activePlanId) {
-          import('./lib/db').then(({ savePlanDocument }) => 
-            savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'topics', topic)
-          ).catch(console.error);
+          syncManager.enqueue(`topics/${topic.id}`, async () => {
+          const { savePlanDocument } = await import('./lib/db');
+          await savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'topics', topic);
+        });
         }
         return { v2Topics };
       }),
       updateV2Topic: (topic) => set(state => {
         const v2Topics = state.v2Topics.map(t => t.id === topic.id ? topic : t);
         if (state.firebaseUser && state.activePlanId) {
-          import('./lib/db').then(({ savePlanDocument }) => 
-            savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'topics', topic)
-          ).catch(console.error);
+          syncManager.enqueue(`topics/${topic.id}`, async () => {
+          const { savePlanDocument } = await import('./lib/db');
+          await savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'topics', topic);
+        });
         }
         return { v2Topics };
       }),
@@ -679,42 +686,46 @@ deleteV2Topic: (id) => set(state => {
         const cycleQueue = state.cycleQueue.filter(c => c.topicId !== id);
 
         if (state.firebaseUser && state.activePlanId) {
-          import('./lib/db').then(async ({ deletePlanDocument }) => {
-            const uid = state.firebaseUser.uid;
-            const pid = state.activePlanId;
+          syncManager.enqueue(`topics/${id}/delete`, async () => {
+            const { deletePlanDocument } = await import('./lib/db');
+            const uid = state.firebaseUser!.uid;
+            const pid = state.activePlanId!;
             await deletePlanDocument(uid, pid, 'topics', id);
             const relatedActivities = state.v2Activities.filter(a => a.topicId === id);
             for (const a of relatedActivities) {
               await deletePlanDocument(uid, pid, 'activities', a.id);
             }
-          }).catch(console.error);
+          });
         }
         return { v2Topics, v2Activities, cycleQueue };
       }),
       addV2Activity: (activity) => set(state => {
         const v2Activities = [...state.v2Activities, activity];
         if (state.firebaseUser && state.activePlanId) {
-          import('./lib/db').then(({ savePlanDocument }) => 
-            savePlanDocument(state.firebaseUser.uid, state.activePlanId, 'activities', activity)
-          ).catch(console.error);
+          syncManager.enqueue(`activities/${activity.id}`, async () => {
+          const { savePlanDocument } = await import('./lib/db');
+          await savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'activities', activity);
+        });
         }
         return { v2Activities };
       }),
       updateV2Activity: (activity) => set(state => {
         const v2Activities = state.v2Activities.map(a => a.id === activity.id ? activity : a);
         if (state.firebaseUser && state.activePlanId) {
-          import('./lib/db').then(({ savePlanDocument }) => 
-            savePlanDocument(state.firebaseUser.uid, state.activePlanId, 'activities', activity)
-          ).catch(console.error);
+          syncManager.enqueue(`activities/${activity.id}`, async () => {
+          const { savePlanDocument } = await import('./lib/db');
+          await savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'activities', activity);
+        });
         }
         return { v2Activities };
       }),
       deleteV2Activity: (id) => set(state => {
         const v2Activities = state.v2Activities.filter(a => a.id !== id);
         if (state.firebaseUser && state.activePlanId) {
-          import('./lib/db').then(({ deletePlanDocument }) => 
-            deletePlanDocument(state.firebaseUser.uid, state.activePlanId, 'activities', id)
-          ).catch(console.error);
+          syncManager.enqueue(`activities/${id}/delete`, async () => {
+          const { deletePlanDocument } = await import('./lib/db');
+          await deletePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'activities', id);
+        });
         }
         return { v2Activities };
       }),
@@ -980,9 +991,9 @@ useStore.subscribe((state, prevState) => {
     
   if (baseDataChanged) {
     if (saveTimeout) clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(async () => {
-      try {
-        const { saveUserConfig, saveLegacyUserBaseData } = await import('./lib/db');
+    saveTimeout = setTimeout(() => {
+      syncManager.enqueue('user_config', async () => {
+        const { saveUserConfig, saveLegacyUserBaseData, savePlanDocument, deletePlanDocument } = await import('./lib/db');
         
         if (state.activePlanId) {
           // V2 user
@@ -995,64 +1006,61 @@ useStore.subscribe((state, prevState) => {
           });
           
           if (state.userProfile !== prevState.userProfile) {
-            import('./lib/db').then(async ({ savePlanDocument, deletePlanDocument }) => {
-              const uid = state.firebaseUser!.uid;
-              const planId = state.activePlanId!;
-              
-              const prevSubs = prevState.userProfile?.subjects || [];
-              const nextSubs = state.userProfile?.subjects || [];
-              
-              // Diff subjects
-              for (const sub of nextSubs) {
-                const prevSub = prevSubs.find(s => s.id === sub.id);
-                if (!prevSub || JSON.stringify(prevSub) !== JSON.stringify(sub)) {
-                  // Created or updated
-                  await savePlanDocument(uid, planId, 'subjects', {
-                    id: sub.id,
-                    planId,
-                    name: sub.name,
-                    importance: sub.importance,
-                    difficulty: sub.difficulty === 'high' ? 5 : (sub.difficulty === 'medium' ? 3 : 1),
-                    isArchived: sub.isArchived || false,
-                    createdAt: prevSub?.id ? new Date().toISOString() : new Date().toISOString(), // In a real app we'd fetch or preserve, but this satisfies types
-                    updatedAt: new Date().toISOString(),
-                  });
-                  
-                  // Diff topics for this subject
-                  const prevTopics = prevSub?.topics || [];
-                  for (const top of sub.topics) {
-                    const prevTop = prevTopics.find(t => t.id === top.id);
-                    if (!prevTop || prevTop.name !== top.name) {
-                      await savePlanDocument(uid, planId, 'topics', {
-                        id: top.id,
-                        subjectId: sub.id,
-                        name: top.name,
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                      });
-                    }
+            const uid = state.firebaseUser!.uid;
+            const planId = state.activePlanId!;
+            
+            const prevSubs = prevState.userProfile?.subjects || [];
+            const nextSubs = state.userProfile?.subjects || [];
+            
+            // Diff subjects
+            for (const sub of nextSubs) {
+              const prevSub = prevSubs.find(s => s.id === sub.id);
+              if (!prevSub || JSON.stringify(prevSub) !== JSON.stringify(sub)) {
+                // Created or updated
+                syncManager.enqueue(`subjects/${sub.id}`, () => savePlanDocument(uid, planId, 'subjects', {
+                  id: sub.id,
+                  planId,
+                  name: sub.name,
+                  importance: sub.importance,
+                  difficulty: sub.difficulty === 'high' ? 5 : (sub.difficulty === 'medium' ? 3 : 1),
+                  isArchived: sub.isArchived || false,
+                  createdAt: prevSub?.id ? new Date().toISOString() : new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                }));
+                
+                // Diff topics for this subject
+                const prevTopics = prevSub?.topics || [];
+                for (const top of sub.topics) {
+                  const prevTop = prevTopics.find(t => t.id === top.id);
+                  if (!prevTop || prevTop.name !== top.name) {
+                    syncManager.enqueue(`topics/${top.id}`, () => savePlanDocument(uid, planId, 'topics', {
+                      id: top.id,
+                      subjectId: sub.id,
+                      name: top.name,
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                    }));
                   }
-                  
-                  // Deleted topics
-                  for (const prevTop of prevTopics) {
-                    if (!sub.topics.find(t => t.id === prevTop.id)) {
-                      await deletePlanDocument(uid, planId, 'topics', prevTop.id);
-                    }
+                }
+                
+                // Deleted topics
+                for (const prevTop of prevTopics) {
+                  if (!sub.topics.find(t => t.id === prevTop.id)) {
+                    syncManager.enqueue(`topics/${prevTop.id}/delete`, () => deletePlanDocument(uid, planId, 'topics', prevTop.id));
                   }
                 }
               }
-              
-              // Deleted subjects
-              for (const prevSub of prevSubs) {
-                if (!nextSubs.find(s => s.id === prevSub.id)) {
-                  await deletePlanDocument(uid, planId, 'subjects', prevSub.id);
-                  // Also delete topics theoretically (handled in DB rules/cascade usually, or manually)
-                  for (const t of prevSub.topics) {
-                    await deletePlanDocument(uid, planId, 'topics', t.id);
-                  }
+            }
+            
+            // Deleted subjects
+            for (const prevSub of prevSubs) {
+              if (!nextSubs.find(s => s.id === prevSub.id)) {
+                syncManager.enqueue(`subjects/${prevSub.id}/delete`, () => deletePlanDocument(uid, planId, 'subjects', prevSub.id));
+                for (const t of prevSub.topics) {
+                  syncManager.enqueue(`topics/${t.id}/delete`, () => deletePlanDocument(uid, planId, 'topics', t.id));
                 }
               }
-            });
+            }
           }
         } else {
           // Legacy user fallback
@@ -1064,10 +1072,8 @@ useStore.subscribe((state, prevState) => {
             activeTask: state.activeTask ?? null,
           });
         }
-      } catch (e) {
-        console.error("Failed to sync base data to DB", e);
-      }
-    }, 1000);
+      });
+    }, 500); // reduced timeout since syncManager debounces via queue anyway
   }
 
   const sessionsChanged = state.sessions !== prevState.sessions;
@@ -1076,23 +1082,20 @@ useStore.subscribe((state, prevState) => {
     const removedSessions = prevState.sessions.filter(s => !state.sessions.find(p => p.id === s.id));
     
     if (newSessions.length > 0 || removedSessions.length > 0) {
-      import('./lib/db').then(async ({ saveLegacySessionToDb, savePlanDocument, deletePlanDocument }) => {
+      import('./lib/db').then(({ saveLegacySessionToDb, savePlanDocument, deletePlanDocument }) => {
         if (state.activePlanId) {
-          // V2
           for (const s of newSessions) {
-            await savePlanDocument(state.firebaseUser!.uid, state.activePlanId, 'sessions', s);
+            syncManager.enqueue(`sessions/${s.id}`, () => savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'sessions', s));
           }
           for (const s of removedSessions) {
-            await deletePlanDocument(state.firebaseUser!.uid, state.activePlanId, 'sessions', s.id);
+            syncManager.enqueue(`sessions/${s.id}/delete`, () => deletePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'sessions', s.id));
           }
         } else {
-          // Legacy
           for (const s of newSessions) {
-            await saveLegacySessionToDb(state.firebaseUser!.uid, s);
+            syncManager.enqueue(`legacy_sessions/${s.id}`, () => saveLegacySessionToDb(state.firebaseUser!.uid, s));
           }
-          // Assuming deleteLegacySessionFromDb exists or we skip for now
         }
-      }).catch(e => console.error("Failed to sync sessions to DB", e));
+      }).catch(e => console.error("Failed to enqueue session sync", e));
     }
   }
 });

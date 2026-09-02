@@ -16,6 +16,52 @@ import {
 } from 'lucide-react';
 import { APP_NAME } from '../config/constants';
 import { useStore } from '../store';
+import { useSyncStatus, syncManager } from '../lib/syncManager';
+import { Cloud, CloudOff, CloudDrizzle, Check, RotateCcw, AlertTriangle } from 'lucide-react';
+
+function SyncIndicator() {
+  const { status, errorMessage } = useSyncStatus();
+
+  if (status === 'idle') return null;
+
+  return (
+    <div className="fixed top-4 right-4 md:top-6 md:right-6 z-50 flex items-center gap-2 px-3 py-1.5 bg-white/90 backdrop-blur-sm border border-neutral-200 rounded-full shadow-sm text-xs font-medium text-neutral-600">
+      {status === 'saving' && (
+        <>
+          <CloudDrizzle size={14} className="animate-pulse text-blue-500" />
+          <span>Salvando...</span>
+        </>
+      )}
+      {status === 'saved' && (
+        <>
+          <Check size={14} className="text-green-500" />
+          <span>Sincronizado</span>
+        </>
+      )}
+      {status === 'offline' && (
+        <>
+          <CloudOff size={14} className="text-orange-500" />
+          <span>Pendente (Offline)</span>
+        </>
+      )}
+      {status === 'error' && (
+        <>
+          <AlertTriangle size={14} className="text-red-500" />
+          <span className="text-red-600 truncate max-w-[120px]" title={errorMessage || 'Erro'}>
+            Falha ao salvar
+          </span>
+          <button 
+            onClick={() => syncManager.forceRetry()} 
+            className="ml-1 p-1 hover:bg-red-50 text-red-600 rounded-full transition-colors"
+            title="Tentar novamente"
+          >
+            <RotateCcw size={12} />
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -151,6 +197,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-y-auto bg-neutral-50 pb-24 md:pb-0 relative">
+      <SyncIndicator />
         
         {/* Mobile Header */}
         <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-neutral-200 sticky top-0 z-30">
