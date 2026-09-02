@@ -11,7 +11,7 @@ interface SyncTask {
 class SyncManager {
   private queue: Map<string, SyncTask> = new Map();
   private isProcessing = false;
-  private online = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  private online = typeof navigator !== 'undefined' && 'onLine' in navigator ? navigator.onLine : true;
 
   public status: SyncStatus = 'idle';
   public pendingCount = 0;
@@ -77,9 +77,14 @@ class SyncManager {
         const [id, task] = this.queue.entries().next().value;
         try {
           await task.execute();
-          this.queue.delete(id);
+          if (this.queue.get(id) === task) {
+            this.queue.delete(id);
+          }
           this.notify();
         } catch (error: any) {
+          if (this.queue.get(id) !== task) {
+            continue;
+          }
           console.error(`Sync error for ${id}:`, error);
           if (error.message?.toLowerCase().includes('offline') || error.code === 'unavailable') {
             this.online = false;
@@ -112,6 +117,9 @@ class SyncManager {
     this.status = 'idle';
     this.errorMessage = null;
     this.online = true; // Assume online for retry attempt
+    for (const task of this.queue.values()) {
+      task.retries = 0;
+    }
     this.processQueue();
   }
 }
