@@ -643,19 +643,25 @@ deleteV2Subject: (id) => set(state => {
         const cycleQueue = state.cycleQueue.filter(c => c.subjectId !== id);
 
         if (state.firebaseUser && state.activePlanId) {
-          syncManager.enqueue(`${state.firebaseUser!.uid}/${state.activePlanId!}/subjects/${id}`, async () => {
+          const uid = state.firebaseUser!.uid;
+          const pid = state.activePlanId!;
+          syncManager.enqueue(`${uid}/${pid}/subjects/${id}`, async () => {
             const { deletePlanDocument } = await import('./lib/db');
-            const uid = state.firebaseUser!.uid;
-            const pid = state.activePlanId!;
             await deletePlanDocument(uid, pid, 'subjects', id);
-            for (const t of relatedTopics) {
-              await deletePlanDocument(uid, pid, 'topics', t.id);
-            }
-            const relatedActivities = state.v2Activities.filter(a => a.subjectId === id);
-            for (const a of relatedActivities) {
-              await deletePlanDocument(uid, pid, 'activities', a.id);
-            }
           });
+          for (const t of relatedTopics) {
+            syncManager.enqueue(`${uid}/${pid}/topics/${t.id}`, async () => {
+              const { deletePlanDocument } = await import('./lib/db');
+              await deletePlanDocument(uid, pid, 'topics', t.id);
+            });
+          }
+          const relatedActivities = state.v2Activities.filter(a => a.subjectId === id);
+          for (const a of relatedActivities) {
+            syncManager.enqueue(`${uid}/${pid}/activities/${a.id}`, async () => {
+              const { deletePlanDocument } = await import('./lib/db');
+              await deletePlanDocument(uid, pid, 'activities', a.id);
+            });
+          }
         }
         return { v2Subjects, v2Topics, v2Activities, cycleQueue };
       }),
@@ -686,16 +692,19 @@ deleteV2Topic: (id) => set(state => {
         const cycleQueue = state.cycleQueue.filter(c => c.topicId !== id);
 
         if (state.firebaseUser && state.activePlanId) {
-          syncManager.enqueue(`${state.firebaseUser!.uid}/${state.activePlanId!}/topics/${id}`, async () => {
+          const uid = state.firebaseUser!.uid;
+          const pid = state.activePlanId!;
+          syncManager.enqueue(`${uid}/${pid}/topics/${id}`, async () => {
             const { deletePlanDocument } = await import('./lib/db');
-            const uid = state.firebaseUser!.uid;
-            const pid = state.activePlanId!;
             await deletePlanDocument(uid, pid, 'topics', id);
-            const relatedActivities = state.v2Activities.filter(a => a.topicId === id);
-            for (const a of relatedActivities) {
-              await deletePlanDocument(uid, pid, 'activities', a.id);
-            }
           });
+          const relatedActivities = state.v2Activities.filter(a => a.topicId === id);
+          for (const a of relatedActivities) {
+            syncManager.enqueue(`${uid}/${pid}/activities/${a.id}`, async () => {
+              const { deletePlanDocument } = await import('./lib/db');
+              await deletePlanDocument(uid, pid, 'activities', a.id);
+            });
+          }
         }
         return { v2Topics, v2Activities, cycleQueue };
       }),
