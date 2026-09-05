@@ -3,6 +3,8 @@ import { useStore } from '../store';
 import { Play, CalendarCheck, TrendingUp, Clock } from 'lucide-react';
 import { calculatePriorityScore } from '../store';
 import { formatDuration } from '../lib/utils';
+import AcademicTodayWidget from './AcademicTodayWidget';
+import { CheckSquare, Square } from 'lucide-react';
 
 export default function Today() {
   const { userProfile, cycleQueue, sessions, setActiveTab, activePlanId, plans, setActiveTask } = useStore();
@@ -45,6 +47,8 @@ export default function Today() {
   const recommendedActivity = nextTask && v2Activities?.find(a => 
     a.topicId === nextTask.topicId && a.status !== 'completed'
   );
+
+  const actualTopic = nextTask && state.v2Topics?.find(t => t.id === nextTask.topicId);
 
   const handleStart = () => {
     if (nextTask) {
@@ -160,6 +164,18 @@ export default function Today() {
                     </p>
                   </div>
                 )}
+                {activePlan?.type === 'academico' && actualTopic && (
+                  <div className="mt-3 flex items-center gap-4">
+                    <div className="flex items-center gap-1.5 text-sm font-medium text-neutral-700">
+                      {actualTopic.preAulaDone ? <CheckSquare size={16} className="text-green-600" /> : <Square size={16} className="text-neutral-400" />}
+                      Pré-aula
+                    </div>
+                    <div className="flex items-center gap-1.5 text-sm font-medium text-neutral-700">
+                      {actualTopic.posAulaDone ? <CheckSquare size={16} className="text-green-600" /> : <Square size={16} className="text-neutral-400" />}
+                      Pós-aula
+                    </div>
+                  </div>
+                )}
                 {recommendedActivity && (
                   <div className="mt-2 flex items-center gap-3 text-sm font-medium text-neutral-600 bg-neutral-100/50 p-2 rounded-lg inline-flex">
                     <span className="bg-white px-2 py-1 rounded shadow-sm border border-neutral-100 text-neutral-900">{recommendedActivity.type}</span>
@@ -188,6 +204,10 @@ export default function Today() {
           </div>
         </div>
       ) : null}
+
+      {activePlan?.type === 'academico' && (
+        <AcademicTodayWidget />
+      )}
 
       {/* Secondary Modules */}
       <div className="grid md:grid-cols-2 gap-6 mt-8">

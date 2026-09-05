@@ -149,7 +149,7 @@ interface AppState {
   setActiveTab: (tab: string) => void;
   setActivePlan: (planId: string) => void;
   switchPlan: (planId: string) => Promise<void>;
-  createPlan: (planData: { name: string, objective: string, examDate: string, availableTimePerDay: Record<number, number> }) => Promise<void>;
+  createPlan: (planData: { name: string, objective: string, type?: 'concurso' | 'vestibular' | 'academico', examDate: string, availableTimePerDay: Record<number, number>, initialSubjects?: any[] }) => Promise<void>;
 }
 
 // (Block removed from here, moving down)
@@ -356,6 +356,7 @@ createPlan: async (planData) => {
           id: newPlanId,
           userId: state.firebaseUser.uid,
           name: planData.name,
+          type: (planData as any).type || 'concurso',
           objective: planData.objective,
           examDate: planData.examDate,
           availableTimePerDay: planData.availableTimePerDay,
@@ -381,13 +382,35 @@ createPlan: async (planData) => {
           weeklyGoalHours: weeklyGoalHours
         }, { merge: true });
         
-        await batch.commit();
+        // Handle initial subjects if provided
+        const initialSubjects = [];
+        if (planData.initialSubjects && planData.initialSubjects.length > 0) {
+          planData.initialSubjects.forEach((sub) => {
+            const subjectId = 'sub_' + crypto.randomUUID().split('-')[0];
+            const newSub = {
+              id: subjectId,
+              planId: newPlanId,
+              name: sub.name,
+              importance: sub.importance || 3,
+              difficulty: sub.difficulty || 3,
+              professor: sub.professor || null,
+              semester: sub.semester || null,
+              maxAbsences: sub.maxAbsences || null,
+              currentAbsences: sub.currentAbsences || 0,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            };
+            batch.set(doc(db, 'users', state.firebaseUser.uid, 'plans', newPlanId, 'subjects', subjectId), newSub);
+            initialSubjects.push(newSub);
+          });
+        }
 
+        await batch.commit();
 
         set({
           plans: [...(state.plans || []), newPlan],
           activePlanId: newPlanId,
-          v2Subjects: [],
+          v2Subjects: initialSubjects,
           v2Topics: [],
           v2Activities: [],
           sessions: [],

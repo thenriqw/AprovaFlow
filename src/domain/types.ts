@@ -7,6 +7,7 @@ export interface Plan {
   id: string;
   userId: string;
   name: string;
+  type?: 'concurso' | 'vestibular' | 'academico';
   objective?: string;
   examDate?: string;
   availableTimePerDay: Record<number, number>; // 0=Sunday, 6=Saturday
@@ -39,6 +40,12 @@ export interface Subject {
   importance: number; // e.g., 1-5
   difficulty: number; // e.g., 1-5
   isArchived?: boolean;
+  professor?: string;
+  semester?: string;
+  maxAbsences?: number;
+  currentAbsences?: number;
+  classroomCourseId?: string;
+  grades?: Array<{ name: string; weight: number; score?: number; maxScore: number }>;
   syllabusSubjectId?: string; // Link to the original syllabus subject if applicable
   createdAt: string;
   updatedAt: string;
@@ -49,6 +56,9 @@ export interface Topic {
   id: string;
   subjectId: string;
   name: string;
+  preAulaDone?: boolean;
+  posAulaDone?: boolean;
+  bibRef?: string;
   createdAt: string;
   updatedAt: string;
 }
