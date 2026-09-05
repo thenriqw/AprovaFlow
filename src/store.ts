@@ -383,7 +383,8 @@ createPlan: async (planData) => {
         }, { merge: true });
         
         // Handle initial subjects if provided
-        const initialSubjects = [];
+        const initialSubjects: any[] = [];
+        const initialTopics: any[] = [];
         if (planData.initialSubjects && planData.initialSubjects.length > 0) {
           planData.initialSubjects.forEach((sub) => {
             const subjectId = 'sub_' + crypto.randomUUID().split('-')[0];
@@ -402,6 +403,22 @@ createPlan: async (planData) => {
             };
             batch.set(doc(db, 'users', state.firebaseUser.uid, 'plans', newPlanId, 'subjects', subjectId), newSub);
             initialSubjects.push(newSub);
+            
+            if (sub.topics && sub.topics.length > 0) {
+              sub.topics.forEach((topicName) => {
+                const topicId = 'topic_' + crypto.randomUUID().split('-')[0];
+                const newTopic = {
+                  id: topicId,
+                  planId: newPlanId,
+                  subjectId: subjectId,
+                  name: topicName,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                };
+                batch.set(doc(db, 'users', state.firebaseUser.uid, 'plans', newPlanId, 'topics', topicId), newTopic);
+                initialTopics.push(newTopic);
+              });
+            }
           });
         }
 
@@ -411,7 +428,7 @@ createPlan: async (planData) => {
           plans: [...(state.plans || []), newPlan],
           activePlanId: newPlanId,
           v2Subjects: initialSubjects,
-          v2Topics: [],
+          v2Topics: initialTopics,
           v2Activities: [],
           sessions: [],
           cycleQueue: [],

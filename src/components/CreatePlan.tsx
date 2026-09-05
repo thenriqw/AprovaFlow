@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
-import { ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, Plus, Trash2, CheckCircle2, Zap } from 'lucide-react';
+import { PLAN_TEMPLATES } from '../data/templates';
 
 export default function CreatePlan() {
   const { setActiveTab, createPlan } = useStore();
@@ -14,6 +15,35 @@ export default function CreatePlan() {
   const [semester, setSemester] = useState('');
   const [subjects, setSubjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+
+  
+  const handleUseTemplate = async (template: any) => {
+    setLoading(true);
+    try {
+      const avail = {0:3, 1:3, 2:3, 3:3, 4:3, 5:3, 6:3};
+
+      await createPlan({
+        name: template.name,
+        objective: template.name,
+        type: template.type,
+        examDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(), // 1 year from now
+        availableTimePerDay: avail,
+        initialSubjects: template.subjects.map((sub: any) => ({
+          name: sub.name,
+          professor: sub.professor,
+          semester: template.semester,
+          maxAbsences: sub.maxAbsences ? parseInt(sub.maxAbsences) : null,
+          topics: sub.topics // Passes the topics array to the store action
+        }))
+      });
+      setActiveTab('today');
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao criar plano a partir do modelo.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddSubject = () => {
     setSubjects([...subjects, { name: '', professor: '', maxAbsences: '' }]);
