@@ -6,6 +6,7 @@ import PlanOverview from './components/PlanOverview';
 import Inbox from './components/Inbox';
 import Progress from './components/Progress';
 import Settings from './components/Settings';
+import Classroom from './components/Classroom';
 import Onboarding from './components/Onboarding';
 import Content from './components/Content';
 import CreatePlan from './components/CreatePlan';
@@ -350,6 +351,7 @@ function App() {
       {currentTab === 'progress' && <Progress />}
       {currentTab === 'timer' && <Timer />}
       {currentTab === 'settings' && <Settings />}
+      {currentTab === 'classroom' && <Classroom />}
       {currentTab === 'create-plan' && <CreatePlan />}
       
       {((import.meta as any).env?.DEV) && new URLSearchParams(window.location.search).get('qa') === '1' && (

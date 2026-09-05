@@ -8,6 +8,7 @@ import {
   Inbox, 
   TrendingUp,
   Settings as SettingsIcon,
+  GraduationCap,
   Plus,
   Play,
   CheckCircle,
@@ -83,6 +84,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
     { id: 'content', label: 'Conteúdo', icon: BookOpen },
     { id: 'inbox', label: 'Entrada', icon: Inbox },
     { id: 'progress', label: 'Progresso', icon: TrendingUp },
+    { id: 'classroom', label: 'Classroom', icon: GraduationCap },
   ];
 
   return (
