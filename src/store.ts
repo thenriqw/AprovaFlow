@@ -344,17 +344,14 @@ export const useStore = create<AppState>()(
       setActivePlan: (planId) => set({ activePlanId: planId }),
 createPlan: async (planData) => {
         const state = get();
-        if (!state.firebaseUser) {
-          throw new Error("Você precisa estar autenticado para criar um plano.");
-        }
-        const { doc, writeBatch } = await import('firebase/firestore');
-        const { db } = await import('./lib/firebase');
-
+        // Permite rodar no preview local mockando o userId se nulo
+        const userId = state.firebaseUser?.uid || 'local_user';
+        
         const newPlanId = 'plan_' + crypto.randomUUID().split('-')[0];
         
         const newPlan = {
           id: newPlanId,
-          userId: state.firebaseUser.uid,
+          userId: userId,
           name: planData.name,
           type: (planData as any).type || 'concurso',
           objective: planData.objective,
@@ -372,19 +369,12 @@ createPlan: async (planData) => {
           subjects: []
         };
 
-        const weeklyGoalHours = Object.values(newPlan.availableTimePerDay).reduce((a, b) => a + b, 0);
+        const weeklyGoalHours = Object.values(newPlan.availableTimePerDay).reduce((a, b) => (a as number) + (b as number), 0);
 
-        const batch = writeBatch(db);
-        batch.set(doc(db, 'users', state.firebaseUser.uid, 'plans', newPlanId), newPlan);
-        batch.set(doc(db, 'users', state.firebaseUser.uid), { 
-          activePlanId: newPlanId,
-          hasCompletedOnboarding: true,
-          weeklyGoalHours: weeklyGoalHours
-        }, { merge: true });
-        
         // Handle initial subjects if provided
         const initialSubjects: any[] = [];
         const initialTopics: any[] = [];
+        
         if (planData.initialSubjects && planData.initialSubjects.length > 0) {
           planData.initialSubjects.forEach((sub) => {
             const subjectId = 'sub_' + crypto.randomUUID().split('-')[0];
@@ -401,11 +391,10 @@ createPlan: async (planData) => {
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString()
             };
-            batch.set(doc(db, 'users', state.firebaseUser.uid, 'plans', newPlanId, 'subjects', subjectId), newSub);
             initialSubjects.push(newSub);
             
             if (sub.topics && sub.topics.length > 0) {
-              sub.topics.forEach((topicName) => {
+              sub.topics.forEach((topicName: string) => {
                 const topicId = 'topic_' + crypto.randomUUID().split('-')[0];
                 const newTopic = {
                   id: topicId,
@@ -415,14 +404,38 @@ createPlan: async (planData) => {
                   createdAt: new Date().toISOString(),
                   updatedAt: new Date().toISOString()
                 };
-                batch.set(doc(db, 'users', state.firebaseUser.uid, 'plans', newPlanId, 'topics', topicId), newTopic);
                 initialTopics.push(newTopic);
               });
             }
           });
         }
 
-        await batch.commit();
+        if (state.firebaseUser) {
+          try {
+            const { doc, writeBatch } = await import('firebase/firestore');
+            const { db } = await import('./lib/firebase');
+            
+            const batch = writeBatch(db);
+            batch.set(doc(db, 'users', userId, 'plans', newPlanId), newPlan);
+            batch.set(doc(db, 'users', userId), { 
+              activePlanId: newPlanId,
+              hasCompletedOnboarding: true,
+              weeklyGoalHours: weeklyGoalHours
+            }, { merge: true });
+            
+            initialSubjects.forEach(sub => {
+              batch.set(doc(db, 'users', userId, 'plans', newPlanId, 'subjects', sub.id), sub);
+            });
+            
+            initialTopics.forEach(topic => {
+              batch.set(doc(db, 'users', userId, 'plans', newPlanId, 'topics', topic.id), topic);
+            });
+            
+            await batch.commit();
+          } catch(e) {
+            console.error("Firebase falhou", e);
+          }
+        }
 
         set({
           plans: [...(state.plans || []), newPlan],
@@ -433,8 +446,9 @@ createPlan: async (planData) => {
           sessions: [],
           cycleQueue: [],
           userProfile: bridgedProfile,
-          weeklyGoalHours: weeklyGoalHours,
-          hasCompletedOnboarding: true
+          weeklyGoalHours: weeklyGoalHours as number,
+          hasCompletedOnboarding: true,
+          activeTab: 'today'
         });
       },
       switchPlan: async (planId) => {

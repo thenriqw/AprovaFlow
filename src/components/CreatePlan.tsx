@@ -15,10 +15,12 @@ export default function CreatePlan() {
   const [semester, setSemester] = useState('');
   const [subjects, setSubjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   
   const handleUseTemplate = async (template: any) => {
     setLoading(true);
+    setError(null);
     try {
       const avail = {0:3, 1:3, 2:3, 3:3, 4:3, 5:3, 6:3};
 
@@ -39,7 +41,7 @@ export default function CreatePlan() {
       setActiveTab('today');
     } catch (error) {
       console.error(error);
-      alert('Erro ao criar plano a partir do modelo.');
+      setError('Erro ao criar plano a partir do modelo.');
     } finally {
       setLoading(false);
     }
@@ -103,6 +105,14 @@ export default function CreatePlan() {
 
       
       {/* Seção de Modelos Pré-definidos */}
+      
+      {error && (
+        <div className="mb-8 p-4 bg-red-50 border border-red-100 text-red-700 rounded-xl flex items-center gap-3 animate-in fade-in">
+          <div className="w-1.5 h-full bg-red-500 rounded-full"></div>
+          <p className="text-sm font-medium">{error}</p>
+        </div>
+      )}
+
       <div className="mb-10">
         <h2 className="text-xl font-bold text-neutral-900 mb-4 flex items-center gap-2">
           <Zap className="text-amber-500" /> Comece com um Modelo Pré-definido
