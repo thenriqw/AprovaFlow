@@ -3,11 +3,14 @@ import { useStore } from '../store';
 import { Play, CalendarCheck, TrendingUp, Clock } from 'lucide-react';
 import { calculatePriorityScore } from '../store';
 import { formatDuration } from '../lib/utils';
+import { calculateStreak } from '../lib/streakUtils';
+import { Flame } from 'lucide-react';
 import AcademicTodayWidget from './AcademicTodayWidget';
 import { CheckSquare, Square } from 'lucide-react';
 
 export default function Today() {
   const { userProfile, cycleQueue, sessions, setActiveTab, activePlanId, plans, setActiveTask } = useStore();
+  const { currentStreak, todayStudied } = calculateStreak(sessions);
   const activePlan = plans?.find(p => p.id === activePlanId);
 
   // Time remaining today calculation
@@ -69,6 +72,14 @@ export default function Today() {
     setActiveTab('timer');
   };
 
+  const todayActivities = state.v2Activities?.filter(act => {
+    if (!act.dueDate) return false;
+    const actDate = new Date(act.dueDate);
+    const today = new Date();
+    return actDate.getDate() === today.getDate() && actDate.getMonth() === today.getMonth();
+  }).sort((a,b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime()) || [];
+
+
   const now = new Date();
   const startOfWeek = new Date(now);
   startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
@@ -90,18 +101,28 @@ export default function Today() {
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
       {/* Time Header */}
-      <div className="flex items-center gap-3">
-        <div className="w-1.5 h-8 bg-neutral-900 rounded-full"></div>
-        <div>
-          <h1 className="text-3xl font-serif font-bold text-neutral-900">
-            {availableToday === 0 ? "Dia de descanso" : 
-              remainingHours === 0 && studiedTodayHours > 0 ? "Meta diária concluída ✓" :
-              `${formatHours(remainingHours)} disponíveis hoje`}
-          </h1>
-          {studiedTodayHours > 0 && availableToday > 0 && remainingHours > 0 && (
-             <p className="text-neutral-500 text-sm mt-1">Você já estudou {formatHours(studiedTodayHours)} hoje.</p>
-          )}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-1.5 h-8 bg-neutral-900 rounded-full"></div>
+          <div>
+            <h1 className="text-3xl font-serif font-bold text-neutral-900">Hoje</h1>
+            <p className="text-neutral-500 text-sm mt-1">Sua visão geral diária e próximos passos.</p>
+          </div>
         </div>
+        
+        <div className="hidden sm:flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-neutral-200 shadow-sm animate-in fade-in slide-in-from-right-4">
+           <Flame size={20} className={todayStudied ? "text-orange-500 fill-orange-500" : "text-neutral-400"} />
+           <div className="flex flex-col">
+             <span className="text-xs font-bold text-neutral-500 uppercase leading-none">Ofensiva</span>
+             <span className="text-sm font-black text-neutral-900 leading-none mt-1">{currentStreak} {currentStreak === 1 ? 'dia' : 'dias'}</span>
+           </div>
+        </div>
+      </div>
+      
+      {/* Mobile Streak */}
+      <div className="sm:hidden flex items-center justify-center gap-2 bg-white p-3 rounded-xl border border-neutral-200 shadow-sm">
+         <Flame size={20} className={todayStudied ? "text-orange-500 fill-orange-500" : "text-neutral-400"} />
+         <span className="text-sm font-black text-neutral-900">{currentStreak} dias de ofensiva</span>
       </div>
 
       {availableToday === 0 ? (
@@ -162,6 +183,25 @@ export default function Today() {
                     <p className="text-sm leading-relaxed">
                       <span className="font-semibold text-neutral-700">Por que agora?</span> {nextTask.reasons.join(' · ')}
                     </p>
+                  </div>
+                )}
+                {todayActivities.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-neutral-200/50">
+                    <p className="text-sm font-bold text-neutral-500 mb-3 uppercase tracking-wider">Atividades de Hoje</p>
+                    <div className="flex flex-col gap-2">
+                      {todayActivities.map(act => (
+                         <div key={act.id} className="flex items-center justify-between bg-white/50 p-2 rounded-lg border border-neutral-100">
+                           <div className="flex items-center gap-2">
+                             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                             <span className="font-semibold text-sm text-neutral-900">{act.title}</span>
+                             <span className="text-xs text-neutral-500 px-2 py-0.5 bg-neutral-100 rounded">{act.type}</span>
+                           </div>
+                           <button onClick={() => { setActiveTask({ subject: state.v2Subjects?.find(s => s.id === act.subjectId)?.name || '', topic: state.v2Topics?.find(t => t.id === act.topicId)?.name || '', subjectId: act.subjectId, topicId: act.topicId, activityId: act.id, activityType: act.type as any, expectedDurationSeconds: act.expectedDurationSeconds }); setActiveTab('timer'); }} className="text-xs font-bold bg-neutral-900 text-white px-3 py-1.5 rounded-lg hover:bg-neutral-800">
+                             Iniciar
+                           </button>
+                         </div>
+                      ))}
+                    </div>
                   </div>
                 )}
                 {activePlan?.type === 'academico' && actualTopic && (

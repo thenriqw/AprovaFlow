@@ -10,6 +10,7 @@ import Classroom from './components/Classroom';
 import Onboarding from './components/Onboarding';
 import Content from './components/Content';
 import CreatePlan from './components/CreatePlan';
+import Schedule from './components/Schedule';
 import QaToolsPanel from './components/QaToolsPanel';
 import { useStore } from './store';
 import { APP_NAME } from './config/constants';
@@ -353,6 +354,7 @@ function App() {
       {currentTab === 'settings' && <Settings />}
       {currentTab === 'classroom' && <Classroom />}
       {currentTab === 'create-plan' && <CreatePlan />}
+      {currentTab === 'schedule' && <Schedule />}
       
       {((import.meta as any).env?.DEV) && new URLSearchParams(window.location.search).get('qa') === '1' && (
         <QaToolsPanel />

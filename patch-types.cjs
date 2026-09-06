@@ -1,0 +1,10 @@
+const fs = require('fs');
+let content = fs.readFileSync('src/domain/types.ts', 'utf-8');
+const search = `  errorReasons?: string[];
+  createdAt: string;`;
+const replace = `  errorReasons?: string[];
+  difficulty?: 'low' | 'medium' | 'high';
+  createdAt: string;`;
+content = content.replace(search, replace);
+fs.writeFileSync('src/domain/types.ts', content);
+console.log("Patched types.ts");

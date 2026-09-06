@@ -111,6 +111,7 @@ export interface StudySession {
     total: number;
   };
   errorReasons?: string[];
+  difficulty?: 'low' | 'medium' | 'high';
   createdAt: string;
   updatedAt: string;
 }

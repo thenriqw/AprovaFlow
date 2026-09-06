@@ -1,3 +1,4 @@
+import { calculateNextReview } from './lib/srsEngine';
 import { create } from 'zustand';
 import { syncManager } from './lib/syncManager';
 import { persist } from 'zustand/middleware';
@@ -410,6 +411,10 @@ createPlan: async (planData) => {
           });
         }
 
+        
+        const { generateWeeklySchedule } = await import('./lib/scheduleEngine');
+        const generatedActivities = generateWeeklySchedule(newPlan as any, initialSubjects, initialTopics);
+
         if (state.firebaseUser) {
           try {
             const { doc, writeBatch } = await import('firebase/firestore');
@@ -431,6 +436,10 @@ createPlan: async (planData) => {
               batch.set(doc(db, 'users', userId, 'plans', newPlanId, 'topics', topic.id), topic);
             });
             
+            generatedActivities.forEach(act => {
+              batch.set(doc(db, 'users', userId, 'plans', newPlanId, 'activities', act.id), act);
+            });
+            
             await batch.commit();
           } catch(e) {
             console.error("Firebase falhou", e);
@@ -442,7 +451,7 @@ createPlan: async (planData) => {
           activePlanId: newPlanId,
           v2Subjects: initialSubjects,
           v2Topics: initialTopics,
-          v2Activities: [],
+          v2Activities: generatedActivities,
           sessions: [],
           cycleQueue: [],
           userProfile: bridgedProfile,
@@ -450,6 +459,7 @@ createPlan: async (planData) => {
           hasCompletedOnboarding: true,
           activeTab: 'today'
         });
+
       },
       switchPlan: async (planId) => {
         const state = get();
@@ -575,6 +585,7 @@ createPlan: async (planData) => {
       addSession: (session) => set((state) => {
         const newSession = { ...session, id: crypto.randomUUID(), date: new Date().toISOString() };
         let newActivities = state.v2Activities || [];
+        
         if (session.activityId) {
           newActivities = newActivities.map(a => {
             if (a.id === session.activityId) {
@@ -592,8 +603,37 @@ createPlan: async (planData) => {
             return a;
           });
         }
+        
+        // SRS: Generate next review if applicable
+        if (state.activePlanId && session.subjectId && session.topicId && ['Videoaula', 'Leitura', 'Questões', 'Revisão'].includes(session.activityType)) {
+           // Provide a default title based on session
+           const topicName = session.topic || state.v2Topics?.find(t => t.id === session.topicId)?.name || 'Tópico';
+           const newReviewActivity = calculateNextReview(
+              session.subjectId,
+              session.topicId,
+              state.activePlanId,
+              topicName,
+              session.difficulty || 'medium',
+              [...state.sessions, newSession] as any
+           );
+           
+           if (newReviewActivity) {
+              // check if we don't already have a pending review for this topic
+              const hasPendingReview = newActivities.some(a => a.topicId === session.topicId && a.type === 'Revisão' && a.status === 'pending');
+              if (!hasPendingReview) {
+                  newActivities.push(newReviewActivity as any);
+                  
+                  if (state.firebaseUser && state.activePlanId) {
+                    syncManager.enqueue(`${state.firebaseUser!.uid}/${state.activePlanId!}/activities/${newReviewActivity.id}`, async () => {
+                      const { savePlanDocument } = await import('./lib/db');
+                      await savePlanDocument(state.firebaseUser!.uid, state.activePlanId!, 'activities', newReviewActivity);
+                    });
+                  }
+              }
+           }
+        }
         return {
-          sessions: [...state.sessions, newSession],
+          sessions: [...state.sessions, newSession] as any,
           v2Activities: newActivities
         };
       }),
